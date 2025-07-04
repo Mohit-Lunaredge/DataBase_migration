@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MySQL to PostgreSQL Migration Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .column-item:hover { background-color: #f0f4f8; }
+        .drop-zone { border: 2px dashed #cbd5e1; }
+        .drop-zone.drag-over { background-color: #e2e8f0; border-color: #4a5568; }
+        .mapped { background-color: #c6f6d5 !important; border-color: #38a169 !important; font-weight: 600; }
+        .mapped-target { background-color: #e6fffa !important; border-color: #38b2ac !important; }
+        .mapped-line { stroke: #4a5568; stroke-width: 2; marker-end: url(#arrow); }
+        .dragging { opacity: 0.5; }
+        #mapping-container { position: relative; }
+        #mapping-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        .table-filter-panel-content { max-height: 200px; overflow-y: auto; }
+        .error-details { background-color: #2d3748; color: #e2e8f0; padding: 0.75rem; margin-top: 0.5rem; border-radius: 0.25rem; font-family: 'Courier New', Courier, monospace; font-size: 0.8rem; white-space: pre-wrap; word-break: break-all; }
+        .data-type { font-size: 0.75rem; color: #718096; margin-left: 0.5rem; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 50; }
+        .modal-content { background: white; padding: 2rem; border-radius: 0.5rem; max-width: 90vw; max-height: 90vh; overflow-y: auto; }
+        .default-value-display { font-size: 0.7rem; font-style: italic; color: #4a5568; margin-top: 2px; }
+        .not-null-badge { font-size: 0.65rem; font-weight: bold; color: #c53030; background-color: #fed7d7; padding: 2px 4px; border-radius: 4px; margin-left: 0.5rem; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800" onload="initializeStep1()">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">MySQL to PostgreSQL Migration Assistant</h1>
+            <p class="text-md text-gray-600 mt-2">Dynamically connect to your database and migrate data.</p>
+        </header>
+        
+        <div id="status-area" class="mb-4 p-4 text-center rounded-md hidden"></div>
+
+        <!-- Step 1: Provide MySQL Dump File Path -->
+        <div id="step1" class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Step 1: Select MySQL Dump File</h2>
+            <p class="text-gray-600 mb-4">Select a file from the `sql_files` directory on the server, or provide a custom path.</p>
+            <select id="sqlFileSelector" class="w-full p-2 border rounded-md mb-2">
+                <option value="">-- Loading files... --</option>
+            </select>
+            <input type="text" id="sqlFilePathInput" placeholder="/path/to/your/dump.sql" class="w-full p-2 border rounded-md hidden">
+            <button onclick="parseSqlFileOnServer()" class="mt-4 bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 transition">Parse SQL File</button>
+        </div>
+
+        <!-- Step 2: Connect to PostgreSQL -->
+        <div id="step2" class="bg-white p-6 rounded-lg shadow-md mb-8 hidden">
+            <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Step 2: Connect to PostgreSQL</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input type="text" id="pgHost" placeholder="Hostname (e.g., localhost)" class="p-2 border rounded-md">
+                <input type="number" id="pgPort" value="5432" placeholder="Port" class="p-2 border rounded-md">
+                <input type="text" id="pgUser" placeholder="Username" class="p-2 border rounded-md">
+                <input type="password" id="pgPassword" placeholder="Password" class="p-2 border rounded-md">
+            </div>
+            <button onclick="fetchDatabases()" class="mt-4 bg-green-600 text-white px-5 py-2 rounded-md hover:bg-green-700 transition">Connect & Fetch Databases</button>
+        </div>
+        
+        <!-- Step 2b: Select Database -->
+        <div id="step2b-db-select" class="bg-white p-6 rounded-lg shadow-md mb-8 hidden">
+            <h3 class="text-xl font-semibold mb-2">Select Target Database</h3>
+            <select id="dbSelector" class="w-full p-2 border rounded-md mb-4"></select>
+            <button onclick="fetchTables()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition">Fetch Tables for Selected DB</button>
+        </div>
+
+        <!-- Step 3: Mapping Interface -->
+        <div id="step3" class="hidden">
+            <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Step 3: Map Tables and Columns</h2>
+            <div id="mapping-container">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="text-xl font-semibold mb-4 text-blue-800">Source (MySQL)</h3>
+                        <div id="mysql-table-filter" class="mb-4"></div>
+                        <div id="mysqlSchema" class="space-y-4"></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="text-xl font-semibold mb-4 text-green-800">Target (PostgreSQL)</h3>
+                        <div id="pg-table-filter" class="mb-4"></div>
+                        <div id="postgresSchema" class="space-y-4"></div>
+                    </div>
+                </div>
+                <svg id="mapping-svg">
+                    <defs>
+                        <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5568" />
+                        </marker>
+                    </defs>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Step 4: Run Migration -->
+        <div id="step4" class="hidden mt-8 text-center">
+            <div class="space-y-2">
+                <label class="flex items-center justify-center">
+                    <input type="checkbox" id="truncateCheckbox" class="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500">
+                    <span class="ml-2 text-gray-700">Clear target tables before migrating (TRUNCATE)</span>
+                </label>
+                <label class="flex items-center justify-center">
+                    <input type="checkbox" id="upsertCheckbox" class="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500">
+                    <span class="ml-2 text-gray-700">Update existing records on conflict (Upsert)</span>
+                </label>
+            </div>
+            <button onclick="runMigration()" class="mt-4 bg-purple-600 text-white font-bold px-8 py-3 rounded-lg hover:bg-purple-700 transition shadow-lg">RUN MIGRATION</button>
+        </div>
+
+    </div>
+    
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal-overlay hidden">
+        <div id="settings-modal-content" class="modal-content"></div>
+    </div>
+
+
+    <script>
+        // Global state variables
+        let mysqlSchemaData = {};
+        let postgresSchemaData = {};
+        let columnMappings = {};
+        let pgConnectionDetails = {};
+        let migrationFilters = {}; 
+        let defaultValues = {}; 
+        let autoIncrementSettings = {};
+        const API_BASE_URL = "http://127.0.0.1:5000";
+
+        // --- Initialization ---
+        async function initializeStep1() {
+            const selector = document.getElementById('sqlFileSelector');
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/list_sql_files`);
+                const files = await response.json();
+                selector.innerHTML = '<option value="">-- Select a file --</option>';
+                files.forEach(file => {
+                    const option = document.createElement('option');
+                    option.value = file;
+                    option.textContent = file;
+                    selector.appendChild(option);
+                });
+            } catch (error) {
+                console.error("Could not fetch SQL file list:", error);
+                selector.innerHTML = '<option value="">-- Could not load files --</option>';
+            }
+            selector.innerHTML += '<option value="custom">-- Enter Full Path Manually --</option>';
+            selector.onchange = () => {
+                const customPathInput = document.getElementById('sqlFilePathInput');
+                if (selector.value === 'custom') {
+                    customPathInput.classList.remove('hidden');
+                } else {
+                    customPathInput.classList.add('hidden');
+                }
+            };
+        }
+
+        // --- Status Update Function ---
+        function showStatus(message, isError = false) {
+            const statusArea = document.getElementById('status-area');
+            statusArea.innerHTML = message;
+            statusArea.className = 'mb-4 p-4 text-center rounded-md';
+            statusArea.classList.add(isError ? 'bg-red-100' : 'bg-blue-100', isError ? 'text-red-700' : 'text-blue-700');
+            statusArea.classList.remove('hidden');
+        }
+
+        // --- API Calls ---
+        async function parseSqlFileOnServer() {
+            const selector = document.getElementById('sqlFileSelector');
+            const customPathInput = document.getElementById('sqlFilePathInput');
+            let payload = {};
+
+            if (selector.value === 'custom') {
+                if (!customPathInput.value) {
+                    alert("Please enter a custom file path.");
+                    return;
+                }
+                payload = { path: customPathInput.value };
+            } else if (selector.value) {
+                payload = { filename: selector.value };
+            } else {
+                alert("Please select a SQL file.");
+                return;
+            }
+
+            showStatus("Parsing SQL file on server...", false);
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/parse_sql_file`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Failed to parse file.');
+                mysqlSchemaData = data;
+                displayMysqlSchema();
+                showStatus("SQL file parsed successfully. Please connect to PostgreSQL.", false);
+                document.getElementById('step2').classList.remove('hidden');
+            } catch (error) { showStatus(`Error: ${error.message}`, true); }
+        }
+        
+        async function fetchDatabases() {
+            pgConnectionDetails = { host: document.getElementById('pgHost').value, port: document.getElementById('pgPort').value, user: document.getElementById('pgUser').value, password: document.getElementById('pgPassword').value };
+            showStatus("Connecting to PostgreSQL...", false);
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/get_databases`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pgConnectionDetails) });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Failed to connect.');
+                const selector = document.getElementById('dbSelector');
+                selector.innerHTML = '';
+                data.forEach(dbName => { const option = document.createElement('option'); option.value = dbName; option.textContent = dbName; selector.appendChild(option); });
+                showStatus("Successfully fetched databases. Please select one.", false);
+                document.getElementById('step2b-db-select').classList.remove('hidden');
+            } catch (error) { showStatus(`Error: ${error.message}`, true); }
+        }
+
+        async function fetchTables() {
+            const selectedDb = document.getElementById('dbSelector').value;
+            if (!selectedDb) { alert("Please select a database first."); return; }
+            pgConnectionDetails.dbname = selectedDb;
+            showStatus(`Fetching tables from "${selectedDb}"...`, false);
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/get_tables`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ creds: pgConnectionDetails, dbname: selectedDb }) });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Failed to fetch tables.');
+                postgresSchemaData = data;
+                displayPostgresSchema();
+                showStatus("Successfully fetched tables. You may now map the columns.", false);
+                document.getElementById('step3').classList.remove('hidden');
+                document.getElementById('step4').classList.remove('hidden');
+            } catch(error) { showStatus(`Error: ${error.message}`, true); }
+        }
+
+        async function runMigration() {
+            if (Object.keys(columnMappings).length === 0 && Object.keys(defaultValues).length === 0 && Object.keys(autoIncrementSettings).length === 0) {
+                alert("Please map at least one column or set a default/auto-increment value before running the migration.");
+                return;
+            }
+            const tableMap = {};
+            for(const sourceKey in columnMappings) {
+                const [mysqlTable, mysqlCol] = sourceKey.split('.');
+                const targetKeys = columnMappings[sourceKey];
+                const [anyPgTable, ] = targetKeys[0].split('.');
+                if (!tableMap[mysqlTable]) { tableMap[mysqlTable] = { pg_table: anyPgTable, column_map: {} }; }
+                tableMap[mysqlTable].column_map[mysqlCol] = targetKeys.map(tk => tk.split('.')[1]);
+            }
+            
+            const selector = document.getElementById('sqlFileSelector');
+            const customPathInput = document.getElementById('sqlFilePathInput');
+            let filePath = selector.value === 'custom' ? customPathInput.value : os.path.join("sql_files", selector.value);
+            
+            const migrationConfig = { 
+                pg_config: pgConnectionDetails, 
+                table_mapping: tableMap, 
+                mysql_dump_file: filePath,
+                pg_schema: postgresSchemaData,
+                truncate_tables: document.getElementById('truncateCheckbox').checked,
+                handle_conflicts: document.getElementById('upsertCheckbox').checked,
+                filters: migrationFilters,
+                default_values: defaultValues,
+                auto_increment_settings: autoIncrementSettings
+            };
+            showStatus("Migration started... This may take a while.", false);
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/run_migration`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(migrationConfig) });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "An unknown server error occurred.");
+                let summaryHtml = `<h3 class="text-lg font-semibold mb-2">${result.message}</h3>`;
+                summaryHtml += '<div class="text-left max-w-3xl mx-auto border rounded-lg bg-white">';
+                if (Object.keys(result.summary).length === 0) { summaryHtml += '<p class="p-4">No data was processed. Check if the source tables exist in the SQL file and are mapped correctly.</p>'; }
+                for (const table in result.summary) {
+                    const stats = result.summary[table];
+                    summaryHtml += `<div class="p-3 border-b last:border-b-0">`;
+                    summaryHtml += `<p><strong>Table: ${table}</strong></p>`;
+                    summaryHtml += `<p class="text-green-700">Rows Inserted: ${stats.inserted}</p>`;
+                    if (stats.updated > 0) {
+                        summaryHtml += `<p class="text-blue-700">Rows Updated (Upsert): ${stats.updated}</p>`;
+                    }
+                    if (stats.filtered_out > 0) {
+                        summaryHtml += `<p class="text-yellow-600">Rows Filtered Out (by WHERE clause): ${stats.filtered_out}</p>`;
+                    }
+                    if (stats.failed > 0) {
+                        summaryHtml += `<p class="text-red-700">Rows Failed: ${stats.failed}</p>`;
+                        if (stats.errors.length > 0) {
+                            summaryHtml += `<button onclick="toggleErrorDetails('${table}-errors')" class="text-sm text-blue-600 hover:underline mt-1">Show Errors</button>`;
+                            summaryHtml += `<div id="${table}-errors" class="hidden error-details">`;
+                            stats.errors.forEach(err => {
+                                summaryHtml += `<div><strong>Error:</strong> ${escapeHtml(err.error)}</div>`;
+                                summaryHtml += `<div class="mt-1"><strong>Query:</strong> ${escapeHtml(err.query)}</div>`;
+                                summaryHtml += `<div class="mt-1"><strong>Values:</strong> ${escapeHtml(JSON.stringify(err.values))}</div><hr class="my-2 border-gray-600">`;
+                            });
+                            summaryHtml += `</div>`;
+                        }
+                    }
+                    summaryHtml += `</div>`;
+                }
+                summaryHtml += '</div>';
+                const statusArea = document.getElementById('status-area');
+                statusArea.innerHTML = summaryHtml;
+                statusArea.className = 'mb-4 p-4 rounded-md bg-gray-100';
+                statusArea.classList.remove('hidden');
+            } catch (error) { showStatus(`Migration Failed: ${error.message}`, true); }
+        }
+        
+        function toggleErrorDetails(elementId) { document.getElementById(elementId).classList.toggle('hidden'); }
+        function escapeHtml(unsafe) { return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
+
+        // --- UI Rendering & Filters ---
+        function displayMysqlSchema() {
+            const container = document.getElementById('mysqlSchema');
+            container.innerHTML = '';
+            createTableFilter('mysql-table-filter', mysqlSchemaData, updateSourceTableVisibility);
+            for (const tableName in mysqlSchemaData) { container.appendChild(createSchemaTableElement(tableName, mysqlSchemaData[tableName].columns, 'mysql')); }
+        }
+
+        function displayPostgresSchema() {
+            const container = document.getElementById('postgresSchema');
+            container.innerHTML = '';
+            createTableFilter('pg-table-filter', postgresSchemaData, updateTargetTableVisibility);
+            for (const tableName in postgresSchemaData) { container.appendChild(createSchemaTableElement(tableName, postgresSchemaData[tableName].columns, 'pg')); }
+        }
+
+        function createTableFilter(containerId, tables, changeHandler) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            if (Object.keys(tables).length === 0) return;
+            const dropdownContainer = document.createElement('div');
+            dropdownContainer.className = 'relative';
+            const dropdownButton = document.createElement('button');
+            dropdownButton.className = 'w-full text-left p-2 border rounded-md bg-white flex justify-between items-center';
+            dropdownButton.innerHTML = '<span>Select tables to display...</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
+            const dropdownPanel = document.createElement('div');
+            dropdownPanel.className = 'hidden absolute bg-white border mt-1 rounded-md shadow-lg z-20 w-full';
+            const searchContainer = document.createElement('div');
+            searchContainer.className = 'p-2 border-b';
+            const searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.placeholder = 'Search tables...';
+            searchInput.className = 'w-full p-1 border rounded-md text-sm';
+            searchContainer.appendChild(searchInput);
+            dropdownPanel.appendChild(searchContainer);
+            const listContainer = document.createElement('div');
+            listContainer.className = 'table-filter-panel-content';
+            Object.keys(tables).sort().forEach(tableName => {
+                const label = document.createElement('label');
+                label.className = 'flex items-center p-2 hover:bg-gray-100 cursor-pointer text-sm';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'mr-2';
+                checkbox.value = tableName;
+                checkbox.checked = false;
+                checkbox.addEventListener('change', changeHandler);
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(tableName));
+                listContainer.appendChild(label);
+            });
+            dropdownPanel.appendChild(listContainer);
+            searchInput.addEventListener('input', () => {
+                const searchTerm = searchInput.value.toLowerCase();
+                listContainer.querySelectorAll('label').forEach(label => {
+                    const tableName = label.textContent.toLowerCase();
+                    label.style.display = tableName.includes(searchTerm) ? 'flex' : 'none';
+                });
+            });
+            dropdownButton.addEventListener('click', (e) => { e.stopPropagation(); dropdownPanel.classList.toggle('hidden'); });
+            dropdownPanel.addEventListener('click', (e) => e.stopPropagation());
+            dropdownContainer.appendChild(dropdownButton);
+            dropdownContainer.appendChild(dropdownPanel);
+            container.appendChild(dropdownContainer);
+        }
+
+        function updateSourceTableVisibility() {
+            const filterContainer = document.getElementById('mysql-table-filter');
+            const checkboxes = filterContainer.querySelectorAll('input[type="checkbox"]');
+            const selectedTables = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+            for (const tableName in mysqlSchemaData) {
+                const tableEl = document.getElementById(`mysql-table-${tableName}`);
+                if (tableEl) tableEl.style.display = selectedTables.includes(tableName) ? 'block' : 'none';
+            }
+            drawMappingLines();
+        }
+
+        function updateTargetTableVisibility() {
+            const filterContainer = document.getElementById('pg-table-filter');
+            const checkboxes = filterContainer.querySelectorAll('input[type="checkbox"]');
+            const selectedTables = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+            for (const tableName in postgresSchemaData) {
+                const tableEl = document.getElementById(`pg-table-${tableName}`);
+                if (tableEl) tableEl.style.display = selectedTables.includes(tableName) ? 'block' : 'none';
+            }
+            drawMappingLines();
+        }
+
+        document.addEventListener('click', () => { document.querySelectorAll('.absolute.bg-white.border').forEach(panel => panel.classList.add('hidden')); });
+
+        function createSchemaTableElement(tableName, columns, type) {
+            const tableDiv = document.createElement('div');
+            tableDiv.id = `${type}-table-${tableName}`;
+            tableDiv.className = 'p-4 border rounded-lg';
+            tableDiv.style.display = 'none'; 
+            
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'flex justify-between items-center';
+            headerDiv.innerHTML = `<h4 class="font-bold text-lg">${tableName}</h4>`;
+            if (type === 'mysql') {
+                const settingsBtn = document.createElement('button');
+                settingsBtn.innerHTML = `<svg class="w-5 h-5 text-gray-500 hover:text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>`;
+                settingsBtn.onclick = () => openSettingsModal(tableName);
+                headerDiv.appendChild(settingsBtn);
+            }
+            tableDiv.appendChild(headerDiv);
+
+            const colsList = document.createElement('div');
+            colsList.className = 'mt-2 space-y-2';
+            columns.forEach(col => {
+                const colItem = document.createElement('div');
+                colItem.className = 'column-item p-2 border rounded-md';
+                
+                const mainContent = document.createElement('div');
+                mainContent.className = 'flex justify-between items-center';
+
+                const nameAndType = document.createElement('div');
+                
+                if (type === 'pg') {
+                    colItem.id = `pg-${tableName}-${col.name}`;
+                    const nullableBadge = col.is_nullable === 'NO' ? '<span class="not-null-badge">NOT NULL</span>' : '';
+                    nameAndType.innerHTML = `${col.name} <span class="data-type">(${col.type})</span>${nullableBadge}`;
+                    colItem.dataset.colName = col.name;
+                    
+                    const btnGroup = document.createElement('div');
+                    btnGroup.className = 'flex space-x-2';
+                    
+                    const defaultBtn = document.createElement('button');
+                    defaultBtn.textContent = 'Default';
+                    defaultBtn.className = 'text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded';
+                    defaultBtn.onclick = (e) => { e.stopPropagation(); setDefaultValue(tableName, col.name); };
+                    
+                    const autoIncBtn = document.createElement('button');
+                    autoIncBtn.textContent = 'Auto-Inc';
+                    autoIncBtn.className = 'text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded';
+                    autoIncBtn.onclick = (e) => { e.stopPropagation(); setAutoIncrement(tableName, col.name); };
+
+                    btnGroup.appendChild(defaultBtn);
+                    btnGroup.appendChild(autoIncBtn);
+                    mainContent.appendChild(nameAndType);
+                    mainContent.appendChild(btnGroup);
+                } else {
+                    colItem.id = `mysql-${tableName}-${col.name}`;
+                    nameAndType.innerHTML = `${col.name} <span class="data-type">(${col.type})</span>`;
+                    mainContent.appendChild(nameAndType);
+                }
+                
+                colItem.appendChild(mainContent);
+
+                if (type === 'mysql') {
+                    colItem.classList.add('cursor-grab');
+                    colItem.draggable = true;
+                    colItem.addEventListener('dragstart', handleDragStart);
+                    colItem.addEventListener('dblclick', handleUnmap);
+                } else {
+                    colItem.classList.add('drop-zone');
+                    colItem.dataset.tableName = tableName;
+                    colItem.addEventListener('dragover', handleDragOver);
+                    colItem.addEventListener('dragleave', handleDragLeave);
+                    colItem.addEventListener('drop', handleDrop);
+                }
+                colsList.appendChild(colItem);
+            });
+            tableDiv.appendChild(colsList);
+            return tableDiv;
+        }
+        
+        // --- Drag & Drop ---
+        function handleDragStart(e) { e.dataTransfer.setData('text/plain', e.target.id); e.target.classList.add('dragging'); }
+        function handleDragOver(e) { e.preventDefault(); const t = e.target.closest('.drop-zone'); if (t) t.classList.add('drag-over'); }
+        function handleDragLeave(e) { e.preventDefault(); const t = e.target.closest('.drop-zone'); if (t) t.classList.remove('drag-over'); }
+        
+        function handleDrop(e) {
+            e.preventDefault();
+            const targetEl = e.target.closest('.drop-zone');
+            if (!targetEl) return;
+            targetEl.classList.remove('drag-over');
+            const sourceId = e.dataTransfer.getData('text/plain');
+            const sourceEl = document.getElementById(sourceId);
+            if (!sourceEl) return;
+            sourceEl.classList.remove('dragging');
+            const [, mysqlTable, mysqlCol] = sourceId.split('-');
+            const pgTable = targetEl.dataset.tableName;
+            const pgCol = targetEl.dataset.colName;
+            const sourceKey = `${mysqlTable}.${mysqlCol}`;
+            const targetKey = `${pgTable}.${pgCol}`;
+            if (!columnMappings[sourceKey]) columnMappings[sourceKey] = [];
+            if (!columnMappings[sourceKey].includes(targetKey)) columnMappings[sourceKey].push(targetKey);
+            sourceEl.classList.add('mapped');
+            targetEl.classList.add('mapped-target');
+            drawMappingLines();
+        }
+
+        function handleUnmap(e) {
+            const sourceEl = e.target;
+            const [, mysqlTable, mysqlCol] = sourceEl.id.split('-');
+            const sourceKey = `${mysqlTable}.${mysqlCol}`;
+            if (columnMappings[sourceKey]) {
+                columnMappings[sourceKey].forEach(targetKey => {
+                    const [pgTable, pgCol] = targetKey.split('.');
+                    const targetEl = document.getElementById(`pg-${pgTable}-${pgCol}`);
+                    if (targetEl) targetEl.classList.remove('mapped-target');
+                });
+                delete columnMappings[sourceKey];
+                sourceEl.classList.remove('mapped');
+                drawMappingLines();
+            }
+        }
+        
+        function drawMappingLines() {
+            const svg = document.getElementById('mapping-svg');
+            svg.innerHTML = svg.querySelector('defs').outerHTML;
+            const containerRect = document.getElementById('mapping-container').getBoundingClientRect();
+            for(const sourceKey in columnMappings) {
+                const targetKeys = columnMappings[sourceKey];
+                const [mysqlTable, mysqlCol] = sourceKey.split('.');
+                const sourceEl = document.getElementById(`mysql-${mysqlTable}-${mysqlCol}`);
+                targetKeys.forEach(targetKey => {
+                    const [pgTable, pgCol] = targetKey.split('.');
+                    const targetEl = document.getElementById(`pg-${pgTable}-${pgCol}`);
+                    if (sourceEl && targetEl && sourceEl.offsetParent !== null && targetEl.offsetParent !== null) {
+                        const sourceRect = sourceEl.getBoundingClientRect();
+                        const targetRect = targetEl.getBoundingClientRect();
+                        const x1 = sourceRect.right - containerRect.left;
+                        const y1 = sourceRect.top + sourceRect.height / 2 - containerRect.top;
+                        const x2 = targetRect.left - containerRect.left;
+                        const y2 = targetRect.top + targetRect.height / 2 - containerRect.top;
+                        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+                        line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+                        line.classList.add('mapped-line');
+                        svg.appendChild(line);
+                    }
+                });
+            }
+        }
+        window.addEventListener('resize', drawMappingLines);
+
+        // --- Settings Modal Functions ---
+        function openSettingsModal(tableName) {
+            const modal = document.getElementById('settings-modal');
+            const content = document.getElementById('settings-modal-content');
+            const tableData = mysqlSchemaData[tableName];
+            const tableFilters = migrationFilters[tableName] || { where: '', replacements: {} };
+            let html = `<h2 class="text-2xl font-bold mb-4">Settings for ${tableName}</h2>`;
+            html += `<div class="mb-6"><label class="block font-semibold mb-1">WHERE Clause (Filter Rows)</label>`;
+            html += `<input type="text" id="where-clause-input" class="w-full p-2 border rounded-md" placeholder="e.g., status = 'active' AND type != 'test'" value="${escapeHtml(tableFilters.where)}"></div>`;
+            html += `<div class="mb-4"><h3 class="font-semibold mb-2">Value Replacements</h3>`;
+            tableData.columns.forEach(col => {
+                html += `<div class="p-2 border-t"><p class="font-medium">${col.name}</p><div id="replacements-for-${col.name}" class="space-y-2 mt-2"></div>`;
+                html += `<button onclick="addReplacementRule('${tableName}', '${col.name}')" class="text-sm text-blue-600 hover:underline mt-2">+ Add Replacement</button></div>`;
+            });
+            html += `</div>`;
+            html += `<div class="flex justify-end space-x-4 mt-6"><button onclick="closeSettingsModal()" class="px-4 py-2 bg-gray-200 rounded-md">Cancel</button><button onclick="saveSettings('${tableName}')" class="px-4 py-2 bg-blue-600 text-white rounded-md">Save Settings</button></div>`;
+            content.innerHTML = html;
+            for (const colName in tableFilters.replacements) {
+                tableFilters.replacements[colName].forEach(rule => addReplacementRule(tableName, colName, rule.find, rule.replace));
+            }
+            modal.classList.remove('hidden');
+        }
+
+        function addReplacementRule(tableName, colName, findVal = '', replaceVal = '') {
+            const container = document.getElementById(`replacements-for-${colName}`);
+            const ruleDiv = document.createElement('div');
+            ruleDiv.className = 'flex items-center space-x-2';
+            ruleDiv.innerHTML = `
+                <input type="text" class="w-1/2 p-1 border rounded-md text-sm find-input" placeholder="Find this value" value="${escapeHtml(findVal)}">
+                <span class="font-bold">→</span>
+                <input type="text" class="w-1/2 p-1 border rounded-md text-sm replace-input" placeholder="Replace with this" value="${escapeHtml(replaceVal)}">
+                <button onclick="this.parentElement.remove()" class="text-red-500 hover:text-red-700">&times;</button>
+            `;
+            container.appendChild(ruleDiv);
+        }
+
+        function saveSettings(tableName) {
+            const whereClause = document.getElementById('where-clause-input').value;
+            const replacements = {};
+            mysqlSchemaData[tableName].columns.forEach(col => {
+                const container = document.getElementById(`replacements-for-${col.name}`);
+                const rules = [];
+                container.querySelectorAll('.flex').forEach(ruleDiv => {
+                    const find = ruleDiv.querySelector('.find-input').value;
+                    const replace = ruleDiv.querySelector('.replace-input').value;
+                    if (find) { rules.push({ find, replace }); }
+                });
+                if (rules.length > 0) { replacements[col.name] = rules; }
+            });
+            migrationFilters[tableName] = { where: whereClause, replacements: replacements };
+            closeSettingsModal();
+        }
+        
+        function setDefaultValue(tableName, colName) {
+            const currentDefault = (defaultValues[tableName] && defaultValues[tableName][colName]) || '';
+            const newValue = prompt(`Enter a default value for ${tableName}.${colName}:`, currentDefault);
+
+            if (newValue === null) return;
+
+            if (!defaultValues[tableName]) {
+                defaultValues[tableName] = {};
+            }
+            defaultValues[tableName][colName] = newValue;
+            
+            const colItem = document.getElementById(`pg-${tableName}-${colName}`);
+            let defaultDisplay = colItem.querySelector('.default-value-display');
+            if (!defaultDisplay) {
+                defaultDisplay = document.createElement('div');
+                defaultDisplay.className = 'default-value-display';
+                colItem.appendChild(defaultDisplay);
+            }
+            defaultDisplay.textContent = `Default: "${newValue}"`;
+        }
+
+        function setAutoIncrement(tableName, colName) {
+            const currentSettings = (autoIncrementSettings[tableName] && autoIncrementSettings[tableName][colName]) || {};
+            const start = prompt("Enter starting number for auto-increment:", currentSettings.start || 1);
+            if (start === null) return;
+            const step = prompt("Enter step value (how much to add for each row):", currentSettings.step || 1);
+            if (step === null) return;
+            
+            if (!autoIncrementSettings[tableName]) {
+                autoIncrementSettings[tableName] = {};
+            }
+            autoIncrementSettings[tableName][colName] = {
+                start: parseInt(start, 10) || 1,
+                step: parseInt(step, 10) || 1
+            };
+            
+            const colItem = document.getElementById(`pg-${tableName}-${colName}`);
+            let autoIncDisplay = colItem.querySelector('.default-value-display');
+            if (!autoIncDisplay) {
+                autoIncDisplay = document.createElement('div');
+                autoIncDisplay.className = 'default-value-display';
+                colItem.appendChild(autoIncDisplay);
+            }
+            autoIncDisplay.textContent = `Auto-Inc: Start=${start}, Step=${step}`;
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settings-modal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
