@@ -102,7 +102,7 @@
                 </label>
                 <label class="flex items-center justify-center">
                     <input type="checkbox" id="upsertCheckbox" class="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500">
-                    <span class="ml-2 text-gray-700">Update existing records on conflict (Upsert)</span>
+                    <span class="ml-2 text-gray-700">Update existing records on conflict (Upsert on 'id' column)</span>
                 </label>
             </div>
             <button onclick="runMigration()" class="mt-4 bg-purple-600 text-white font-bold px-8 py-3 rounded-lg hover:bg-purple-700 transition shadow-lg">RUN MIGRATION</button>
@@ -277,7 +277,7 @@
                             summaryHtml += `<div id="${table}-errors" class="hidden error-details">`;
                             stats.errors.forEach(err => {
                                 summaryHtml += `<div><strong>Error:</strong> ${escapeHtml(err.error)}</div>`;
-                                summaryHtml += `<div class="mt-1"><strong>Query:</strong> ${escapeHtml(err.query)}</div>`;
+                                summaryHtml += `<div class="mt-1"><strong>Query:</strong> <pre>${escapeHtml(err.query)}</pre></div>`;
                                 summaryHtml += `<div class="mt-1"><strong>Values:</strong> ${escapeHtml(JSON.stringify(err.values))}</div><hr class="my-2 border-gray-600">`;
                             });
                             summaryHtml += `</div>`;
@@ -295,7 +295,7 @@
         
         function toggleErrorDetails(elementId) { document.getElementById(elementId).classList.toggle('hidden'); }
         function escapeHtml(unsafe) { 
-            if (typeof unsafe !== 'string') return unsafe === null ? '' : unsafe;
+            if (typeof unsafe !== 'string') return unsafe === null || unsafe === undefined ? '' : unsafe;
             return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); 
         }
 
@@ -510,7 +510,9 @@
                         const sourceEl = document.getElementById(`mysql-${rule.source_table}-${rule.value}`);
                         if(sourceEl) sourceEl.classList.add('mapped');
                     } else if(rule.type === 'static') {
-                        badgeText = `[STATIC]`;
+                        badgeText = `[STATIC: ${rule.value}]`;
+                    } else if (rule.type === 'auto-increment') {
+                        badgeText = `[AUTO-INC]`;
                     } else if (rule.type === 'transformation') {
                         badgeText = `[${rule.function}]`;
                         rule.params.columns.forEach(sourceColName => {
@@ -574,6 +576,7 @@
         function openMappingPanel(pgTable, pgCol) {
             const modal = document.getElementById('mapping-panel-modal');
             const content = document.getElementById('mapping-panel-content');
+            const currentRule = mappingRules[pgTable]?.[pgCol.name] || {};
             
             let html = `<h2 class="text-2xl font-bold mb-4">Set Mapping for ${pgTable}.${pgCol.name}</h2>`;
             html += `
@@ -582,13 +585,31 @@
                     <select id="mapping-type-selector" class="w-full p-2 border rounded-md">
                         <option value="none">-- None --</option>
                         <option value="direct">Direct Mapping (from Source)</option>
-                        <option value="transformation">Transformation</option>
-                        <option value="lookup">Lookup from Target Table</option>
+                        <option value="transformation">Transformation (e.g., CONCAT)</option>
+                        <option value="lookup">Lookup from another Source Table</option>
                         <option value="static">Static Value</option>
                         <option value="auto-increment">Auto-Increment</option>
                     </select>
                 </div>
                 <div id="mapping-options" class="space-y-4 border-t pt-4"></div>
+
+                <!-- Fallback Options -->
+                <div class="mt-6 border-t pt-4">
+                    <h3 class="font-semibold text-lg mb-2">Fallback for Null Values</h3>
+                    <p class="text-sm text-gray-600 mb-3">If the source value is NULL, use this fallback. This is ignored for Static and Auto-Increment mapping types.</p>
+                    <div class="flex items-center mb-3">
+                        <input type="checkbox" id="fallback-enabled-checkbox" class="h-4 w-4">
+                        <label for="fallback-enabled-checkbox" class="ml-2">Enable Fallback</label>
+                    </div>
+                    <div id="fallback-options-container" class="hidden space-y-4">
+                        <select id="fallback-type-selector" class="w-full p-2 border rounded-md">
+                            <option value="static">Static Fallback</option>
+                            <option value="auto-increment">Auto-increment Fallback</option>
+                        </select>
+                        <div id="fallback-options"></div>
+                    </div>
+                </div>
+
                 <div class="flex justify-end space-x-4 mt-6">
                     <button onclick="closeMappingPanelModal()" class="px-4 py-2 bg-gray-200 rounded-md">Cancel</button>
                     <button onclick="saveMappingRule('${pgTable}', '${pgCol.name}')" class="px-4 py-2 bg-blue-600 text-white rounded-md">Save Mapping</button>
@@ -596,14 +617,35 @@
             `;
             content.innerHTML = html;
 
-            const selector = document.getElementById('mapping-type-selector');
-            selector.onchange = () => renderMappingOptions(pgTable, pgCol.name);
+            const typeSelector = document.getElementById('mapping-type-selector');
+            const fallbackEnabledCheckbox = document.getElementById('fallback-enabled-checkbox');
+            const fallbackContainer = document.getElementById('fallback-options-container');
+            const fallbackTypeSelector = document.getElementById('fallback-type-selector');
+
+            typeSelector.onchange = () => {
+                const isFallbackDisabled = ['static', 'auto-increment', 'none'].includes(typeSelector.value);
+                document.querySelector('.mt-6.border-t.pt-4').style.display = isFallbackDisabled ? 'none' : 'block';
+                renderMappingOptions(pgTable, pgCol.name);
+            };
             
-            const currentRule = mappingRules[pgTable]?.[pgCol.name];
-            if (currentRule) {
-                selector.value = currentRule.type;
+            fallbackEnabledCheckbox.onchange = () => {
+                fallbackContainer.classList.toggle('hidden', !fallbackEnabledCheckbox.checked);
+            };
+
+            fallbackTypeSelector.onchange = () => renderFallbackOptions(currentRule.on_null);
+            
+            if (currentRule.type) {
+                typeSelector.value = currentRule.type;
             }
-            renderMappingOptions(pgTable, pgCol.name);
+            
+            if(currentRule.on_null) {
+                fallbackEnabledCheckbox.checked = true;
+                fallbackContainer.classList.remove('hidden');
+                fallbackTypeSelector.value = currentRule.on_null.type;
+            }
+
+            typeSelector.dispatchEvent(new Event('change'));
+            renderFallbackOptions(currentRule.on_null);
             
             modal.classList.remove('hidden');
         }
@@ -618,80 +660,69 @@
             const createInput = (id, label, value, type='text') => `<div><label class="block font-semibold text-sm mb-1">${label}</label><input type="${type}" id="${id}" class="w-full p-2 border rounded-md" value="${escapeHtml(value)}"></div>`;
 
             if (type === 'direct') {
-                const tableOptions = Object.keys(mysqlSchemaData).map(t => `<option value="${t}">${t}</option>`).join('');
-                html = createSelect('direct-source-table', 'Source Table', tableOptions);
-                html += `<div><label class="block font-semibold text-sm mb-1">Source Column</label><select id="direct-source-col" class="w-full p-2 border rounded-md"></select></div>`;
+                let allSourceCols = '';
+                Object.keys(mysqlSchemaData).forEach(t => {
+                    mysqlSchemaData[t].columns.forEach(c => {
+                        allSourceCols += `<option value="${c.name}" data-table="${t}">${t}.${c.name}</option>`
+                    })
+                });
+                html = createSelect('direct-source-col', 'Source Column', allSourceCols);
             } else if (type === 'static') {
                 html = createInput('static-value', 'Static Value', currentRule.value || '');
             } else if (type === 'auto-increment') {
                 html = createInput('auto-inc-start', 'Start Number', currentRule.start || 1, 'number');
                 html += createInput('auto-inc-step', 'Step', currentRule.step || 1, 'number');
             } else if (type === 'lookup') {
-                const pgTableOptions = Object.keys(postgresSchemaData).map(t => `<option value="${t}">${t}</option>`).join('');
                 const mySqlTableOptions = Object.keys(mysqlSchemaData).map(t => `<option value="${t}">${t}</option>`).join('');
                 html = `
-                    <p class="text-sm font-bold text-gray-700">1. Find a row in a PostgreSQL table...</p>
-                    ${createSelect('lookup-table', 'Target Lookup Table', pgTableOptions)}
+                    <p class="text-sm font-bold text-gray-700">1. Find a row in another source table...</p>
+                    ${createSelect('lookup-source-table', 'Lookup From Table', mySqlTableOptions)}
                     ${createSelect('lookup-where-col', '...where this column...', '')}
-                    <p class="text-sm font-bold text-gray-700 mt-2">2. ...matches a value from the source row.</p>
-                    ${createSelect('lookup-source-table', 'Source Table for Match Value', mySqlTableOptions)}
-                    ${createSelect('lookup-match-col', '...using this source column.', '')}
+                    <p class="text-sm font-bold text-gray-700 mt-2">2. ...matches a value from the primary source row.</p>
+                    ${createSelect('lookup-match-col', '...using this column from the primary table.', '')}
                     <p class="text-sm font-bold text-gray-700 mt-2">3. Then get the result.</p>
                     ${createSelect('lookup-get-col', 'Get value from this column in the found row', '')}
                     ${createInput('lookup-default-val', 'Default value if not found (optional)', currentRule.default || '')}
                 `;
             } else if (type === 'transformation') {
                 const tableOptions = Object.keys(mysqlSchemaData).map(t => `<option value="${t}">${t}</option>`).join('');
-                html = createSelect('transform-source-table', 'Source Table', tableOptions);
+                html = createSelect('transform-source-table', 'Source Table for Transformation', tableOptions);
                 html += createSelect('transform-function', 'Function', '<option value="CONCAT">CONCAT</option>');
                 html += `<div id="transform-params" class="p-2 border rounded-md bg-gray-50 space-y-2 mt-2"></div>`;
             }
             container.innerHTML = html;
 
             // Add dynamic event listeners and populate selects
-            if (type === 'direct') {
-                const tableSelect = document.getElementById('direct-source-table');
+            if (type === 'direct' && currentRule.value) {
                 const colSelect = document.getElementById('direct-source-col');
-                const updateCols = () => {
-                    colSelect.innerHTML = '';
-                    mysqlSchemaData[tableSelect.value].columns.forEach(c => colSelect.innerHTML += `<option value="${c.name}">${c.name}</option>`);
-                };
-                tableSelect.onchange = updateCols;
-                if (currentRule.source_table) tableSelect.value = currentRule.source_table;
-                updateCols();
-                if (currentRule.value) colSelect.value = currentRule.value;
+                const optionToSelect = colSelect.querySelector(`option[value="${currentRule.value}"][data-table="${currentRule.source_table}"]`);
+                if(optionToSelect) optionToSelect.selected = true;
             } else if (type === 'lookup') {
-                const lookupTableSelect = document.getElementById('lookup-table');
+                const lookupTableSelect = document.getElementById('lookup-source-table');
                 const whereColSelect = document.getElementById('lookup-where-col');
                 const getColSelect = document.getElementById('lookup-get-col');
-                const sourceTableSelect = document.getElementById('lookup-source-table');
                 const matchColSelect = document.getElementById('lookup-match-col');
 
-                const updateTargetCols = () => {
+                const updateLookupCols = () => {
                     const selectedTable = lookupTableSelect.value;
-                    const cols = postgresSchemaData[selectedTable]?.columns || [];
+                    const cols = mysqlSchemaData[selectedTable]?.columns || [];
                     const options = cols.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
                     whereColSelect.innerHTML = options;
                     getColSelect.innerHTML = options;
                 };
-                const updateSourceCols = () => {
-                    const selectedTable = sourceTableSelect.value;
-                    const cols = mysqlSchemaData[selectedTable]?.columns || [];
-                    matchColSelect.innerHTML = cols.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-                };
 
-                lookupTableSelect.onchange = updateTargetCols;
-                sourceTableSelect.onchange = updateSourceCols;
-
-                if(currentRule.lookup_table) lookupTableSelect.value = currentRule.lookup_table;
-                updateTargetCols();
+                // Find primary source table to populate the "match from" dropdown
+                const primarySourceTable = findPrimarySourceTable(pgTable);
+                const primaryCols = mysqlSchemaData[primarySourceTable]?.columns || [];
+                matchColSelect.innerHTML = primaryCols.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+                
+                lookupTableSelect.onchange = updateLookupCols;
+                
+                if(currentRule.lookup_source_table) lookupTableSelect.value = currentRule.lookup_source_table;
+                updateLookupCols();
                 if(currentRule.where_col) whereColSelect.value = currentRule.where_col;
                 if(currentRule.get_col) getColSelect.value = currentRule.get_col;
-
-                if(currentRule.source_table) sourceTableSelect.value = currentRule.source_table;
-                updateSourceCols();
                 if(currentRule.match_col) matchColSelect.value = currentRule.match_col;
-
             } else if (type === 'transformation') {
                 const tableSelect = document.getElementById('transform-source-table');
                 const functionSelect = document.getElementById('transform-function');
@@ -701,10 +732,22 @@
                         const colOptions = mysqlSchemaData[tableSelect.value].columns.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
                         paramsContainer.innerHTML = `
                             <p class="text-sm font-medium">CONCAT Parameters</p>
-                            ${createSelect('transform-param-col1', 'Column 1', colOptions)}
-                            ${createSelect('transform-param-col2', 'Column 2', colOptions)}
+                            <div id="concat-cols-container" class="space-y-1">
+                                <select class="w-full p-1 border rounded-md text-sm concat-col-select">${colOptions}</select>
+                                <select class="w-full p-1 border rounded-md text-sm concat-col-select">${colOptions}</select>
+                            </div>
+                            <button onclick="addConcatColumn('${tableSelect.value}')" class="text-xs text-blue-600 hover:underline">+ Add another column</button>
                             ${createInput('transform-param-separator', 'Separator', currentRule.params?.separator || ' ')}
                         `;
+                        // Set saved values
+                        if(currentRule.params?.columns) {
+                            const selects = paramsContainer.querySelectorAll('.concat-col-select');
+                            selects.forEach((sel, i) => {
+                                if (currentRule.params.columns[i]) {
+                                    sel.value = currentRule.params.columns[i];
+                                }
+                            });
+                        }
                     }
                 };
                 tableSelect.onchange = renderTransformParams;
@@ -712,6 +755,46 @@
                 if(currentRule.source_table) tableSelect.value = currentRule.source_table;
                 renderTransformParams();
             }
+        }
+        
+        function addConcatColumn(tableName) {
+            const container = document.getElementById('concat-cols-container');
+            const colOptions = mysqlSchemaData[tableName].columns.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+            const newSelect = document.createElement('select');
+            newSelect.className = 'w-full p-1 border rounded-md text-sm concat-col-select';
+            newSelect.innerHTML = colOptions;
+            container.appendChild(newSelect);
+        }
+
+        function findPrimarySourceTable(pgTable) {
+            const counts = {};
+            const rules = mappingRules[pgTable] || {};
+            for(const col in rules) {
+                const rule = rules[col];
+                if (rule.source_table) {
+                    counts[rule.source_table] = (counts[rule.source_table] || 0) + 1;
+                }
+            }
+            if(Object.keys(counts).length === 0) {
+                // If no mappings yet, just guess the first one
+                return Object.keys(mysqlSchemaData)[0];
+            }
+            return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+        }
+
+        function renderFallbackOptions(currentFallbackRule = {}) {
+            const container = document.getElementById('fallback-options');
+            const type = document.getElementById('fallback-type-selector').value;
+            let html = '';
+            const createInput = (id, label, value, type='text') => `<div><label class="block font-semibold text-sm mb-1">${label}</label><input type="${type}" id="${id}" class="w-full p-2 border rounded-md" value="${escapeHtml(value)}"></div>`;
+
+            if (type === 'static') {
+                html = createInput('fallback-static-value', 'Fallback Static Value', currentFallbackRule.value || '');
+            } else if (type === 'auto-increment') {
+                html = createInput('fallback-auto-inc-start', 'Start Number', currentFallbackRule.start || 1, 'number');
+                html += createInput('fallback-auto-inc-step', 'Step', currentFallbackRule.step || 1, 'number');
+            }
+            container.innerHTML = html;
         }
 
         function saveMappingRule(pgTable, pgCol) {
@@ -723,8 +806,9 @@
             } else {
                 let newRule = { type };
                 if (type === 'direct') {
-                    newRule.value = document.getElementById('direct-source-col').value;
-                    newRule.source_table = document.getElementById('direct-source-table').value;
+                    const selectedOption = document.getElementById('direct-source-col').selectedOptions[0];
+                    newRule.value = selectedOption.value;
+                    newRule.source_table = selectedOption.dataset.table;
                 } else if (type === 'static') {
                     newRule.value = document.getElementById('static-value').value;
                 } else if (type === 'auto-increment') {
@@ -734,26 +818,40 @@
                     newRule.source_table = document.getElementById('transform-source-table').value;
                     newRule.function = document.getElementById('transform-function').value;
                     if (newRule.function === 'CONCAT') {
+                        const columns = Array.from(document.querySelectorAll('.concat-col-select')).map(sel => sel.value);
                         newRule.params = {
-                            columns: [document.getElementById('transform-param-col1').value, document.getElementById('transform-param-col2').value],
+                            columns: columns,
                             separator: document.getElementById('transform-param-separator').value
                         };
                     }
                 } else if (type === 'lookup') {
-                    newRule.lookup_table = document.getElementById('lookup-table').value;
+                    newRule.lookup_source_table = document.getElementById('lookup-source-table').value;
                     newRule.where_col = document.getElementById('lookup-where-col').value;
                     newRule.get_col = document.getElementById('lookup-get-col').value;
-                    newRule.source_table = document.getElementById('lookup-source-table').value;
                     newRule.match_col = document.getElementById('lookup-match-col').value;
                     newRule.default = document.getElementById('lookup-default-val').value;
+                    newRule.source_table = findPrimarySourceTable(pgTable);
                 }
+                
+                if (document.getElementById('fallback-enabled-checkbox').checked && !['static', 'auto-increment'].includes(type)) {
+                    const fallbackType = document.getElementById('fallback-type-selector').value;
+                    let fallbackRule = { type: fallbackType };
+                    if (fallbackType === 'static') {
+                        fallbackRule.value = document.getElementById('fallback-static-value').value;
+                    } else if (fallbackType === 'auto-increment') {
+                        fallbackRule.start = parseInt(document.getElementById('fallback-auto-inc-start').value);
+                        fallbackRule.step = parseInt(document.getElementById('fallback-auto-inc-step').value);
+                    }
+                    newRule.on_null = fallbackRule;
+                }
+
                 mappingRules[pgTable][pgCol] = newRule;
             }
             
             updateColumnUIs();
             closeMappingPanelModal();
         }
-
+        
         function openSettingsModal(tableName) {
             const modal = document.getElementById('settings-modal');
             const content = document.getElementById('settings-modal-content');
@@ -769,7 +867,7 @@
             
             html += `<div class="mb-4 border-b pb-4">
                         <h3 class="font-semibold mb-2">Sort Source Data</h3>
-                        <p class="text-sm text-gray-600 mb-2">Sort the data from this table before processing. Useful for ordered insertions.</p>
+                        <p class="text-sm text-gray-600 mb-2">Sort the data from this table before processing. This applies only if it's the primary source table for a mapping.</p>
                         <div class="flex space-x-2">
                             <select id="sort-column-select" class="w-2/3 p-2 border rounded-md">${colOptions}</select>
                             <select id="sort-order-select" class="w-1/3 p-2 border rounded-md">
@@ -777,7 +875,7 @@
                                 <option value="DESC" ${tableSort.order === 'DESC' ? 'selected' : ''}>Descending</option>
                             </select>
                         </div>
-                     </div>`;
+                    </div>`;
 
             html += `<div class="mb-6"><label class="block font-semibold mb-1">WHERE Clause (Filter Rows)</label>`;
             html += `<input type="text" id="where-clause-input" class="w-full p-2 border rounded-md" placeholder="e.g., role = 'teacher' AND status != 'inactive'" value="${escapeHtml(tableFilters.where || '')}"></div>`;
@@ -814,25 +912,22 @@
         }
 
         function saveSettings(tableName) {
-            // Save sorting settings
-            const sortColumn = document.getElementById('sort-column-select').value;
-            const sortOrder = document.getElementById('sort-order-select').value;
-            
             if (!migrationFilters[tableName]) {
                 migrationFilters[tableName] = {};
             }
 
+            const sortColumn = document.getElementById('sort-column-select').value;
             if (sortColumn) {
-                migrationFilters[tableName].sort = { column: sortColumn, order: sortOrder };
+                migrationFilters[tableName].sort = { 
+                    column: sortColumn, 
+                    order: document.getElementById('sort-order-select').value 
+                };
             } else {
                 delete migrationFilters[tableName].sort;
             }
 
-            // Save WHERE clause
-            const whereClause = document.getElementById('where-clause-input').value;
-            migrationFilters[tableName].where = whereClause;
+            migrationFilters[tableName].where = document.getElementById('where-clause-input').value;
 
-            // Save replacements
             const replacements = {};
             mysqlSchemaData[tableName].columns.forEach(col => {
                 const container = document.getElementById(`replacements-for-${col.name}`);
