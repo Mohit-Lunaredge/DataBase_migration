@@ -520,7 +520,11 @@
                             if(sourceEl) sourceEl.classList.add('mapped');
                         });
                     } else if (rule.type === 'lookup') {
-                        badgeText = `[LOOKUP]`;
+                        badgeText = `[S-LOOKUP]`;
+                        const sourceEl = document.getElementById(`mysql-${rule.source_table}-${rule.match_col}`);
+                        if(sourceEl) sourceEl.classList.add('mapped');
+                    } else if (rule.type === 'target_lookup') {
+                        badgeText = `[T-LOOKUP]`;
                         const sourceEl = document.getElementById(`mysql-${rule.source_table}-${rule.match_col}`);
                         if(sourceEl) sourceEl.classList.add('mapped');
                     }
@@ -564,7 +568,7 @@
                         drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${rule.value}`));
                     } else if (rule.type === 'transformation') {
                         rule.params.columns.forEach(col => drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${col}`)));
-                    } else if (rule.type === 'lookup') {
+                    } else if (rule.type === 'lookup' || rule.type === 'target_lookup') {
                         drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${rule.match_col}`));
                     }
                 }
@@ -587,6 +591,7 @@
                         <option value="direct">Direct Mapping (from Source)</option>
                         <option value="transformation">Transformation (e.g., CONCAT)</option>
                         <option value="lookup">Lookup from another Source Table</option>
+                        <option value="target_lookup">Lookup from Target DB Table</option>
                         <option value="static">Static Value</option>
                         <option value="auto-increment">Auto-Increment</option>
                     </select>
@@ -672,14 +677,16 @@
             } else if (type === 'auto-increment') {
                 html = createInput('auto-inc-start', 'Start Number', currentRule.start || 1, 'number');
                 html += createInput('auto-inc-step', 'Step', currentRule.step || 1, 'number');
-            } else if (type === 'lookup') {
-                const mySqlTableOptions = Object.keys(mysqlSchemaData).map(t => `<option value="${t}">${t}</option>`).join('');
+            } else if (type === 'lookup' || type === 'target_lookup') {
+                const isTargetLookup = type === 'target_lookup';
+                const lookupSchema = isTargetLookup ? postgresSchemaData : mysqlSchemaData;
+                const lookupTableOptions = Object.keys(lookupSchema).map(t => `<option value="${t}">${t}</option>`).join('');
                 html = `
-                    <p class="text-sm font-bold text-gray-700">1. Find a row in another source table...</p>
-                    ${createSelect('lookup-source-table', 'Lookup From Table', mySqlTableOptions)}
+                    <p class="text-sm font-bold text-gray-700">1. Find a row in another ${isTargetLookup ? 'TARGET' : 'SOURCE'} table...</p>
+                    ${createSelect('lookup-table', `Lookup From ${isTargetLookup ? 'PG' : 'MySQL'} Table`, lookupTableOptions)}
                     ${createSelect('lookup-where-col', '...where this column...', '')}
                     <p class="text-sm font-bold text-gray-700 mt-2">2. ...matches a value from the primary source row.</p>
-                    ${createSelect('lookup-match-col', '...using this column from the primary table.', '')}
+                    ${createSelect('lookup-match-col', '...using this column from the primary source table.', '')}
                     <p class="text-sm font-bold text-gray-700 mt-2">3. Then get the result.</p>
                     ${createSelect('lookup-get-col', 'Get value from this column in the found row', '')}
                     ${createInput('lookup-default-val', 'Default value if not found (optional)', currentRule.default || '')}
@@ -697,28 +704,29 @@
                 const colSelect = document.getElementById('direct-source-col');
                 const optionToSelect = colSelect.querySelector(`option[value="${currentRule.value}"][data-table="${currentRule.source_table}"]`);
                 if(optionToSelect) optionToSelect.selected = true;
-            } else if (type === 'lookup') {
-                const lookupTableSelect = document.getElementById('lookup-source-table');
+            } else if (type === 'lookup' || type === 'target_lookup') {
+                const isTargetLookup = type === 'target_lookup';
+                const lookupSchema = isTargetLookup ? postgresSchemaData : mysqlSchemaData;
+                const lookupTableSelect = document.getElementById('lookup-table');
                 const whereColSelect = document.getElementById('lookup-where-col');
                 const getColSelect = document.getElementById('lookup-get-col');
                 const matchColSelect = document.getElementById('lookup-match-col');
 
                 const updateLookupCols = () => {
                     const selectedTable = lookupTableSelect.value;
-                    const cols = mysqlSchemaData[selectedTable]?.columns || [];
+                    const cols = lookupSchema[selectedTable]?.columns || [];
                     const options = cols.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
                     whereColSelect.innerHTML = options;
                     getColSelect.innerHTML = options;
                 };
 
-                // Find primary source table to populate the "match from" dropdown
                 const primarySourceTable = findPrimarySourceTable(pgTable);
                 const primaryCols = mysqlSchemaData[primarySourceTable]?.columns || [];
                 matchColSelect.innerHTML = primaryCols.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
                 
                 lookupTableSelect.onchange = updateLookupCols;
                 
-                if(currentRule.lookup_source_table) lookupTableSelect.value = currentRule.lookup_source_table;
+                if(currentRule.lookup_table || currentRule.lookup_source_table) lookupTableSelect.value = currentRule.lookup_table || currentRule.lookup_source_table;
                 updateLookupCols();
                 if(currentRule.where_col) whereColSelect.value = currentRule.where_col;
                 if(currentRule.get_col) getColSelect.value = currentRule.get_col;
@@ -739,14 +747,9 @@
                             <button onclick="addConcatColumn('${tableSelect.value}')" class="text-xs text-blue-600 hover:underline">+ Add another column</button>
                             ${createInput('transform-param-separator', 'Separator', currentRule.params?.separator || ' ')}
                         `;
-                        // Set saved values
                         if(currentRule.params?.columns) {
                             const selects = paramsContainer.querySelectorAll('.concat-col-select');
-                            selects.forEach((sel, i) => {
-                                if (currentRule.params.columns[i]) {
-                                    sel.value = currentRule.params.columns[i];
-                                }
-                            });
+                            selects.forEach((sel, i) => { if (currentRule.params.columns[i]) sel.value = currentRule.params.columns[i]; });
                         }
                     }
                 };
@@ -775,10 +778,7 @@
                     counts[rule.source_table] = (counts[rule.source_table] || 0) + 1;
                 }
             }
-            if(Object.keys(counts).length === 0) {
-                // If no mappings yet, just guess the first one
-                return Object.keys(mysqlSchemaData)[0];
-            }
+            if(Object.keys(counts).length === 0) return Object.keys(mysqlSchemaData)[0];
             return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
         }
 
@@ -819,13 +819,17 @@
                     newRule.function = document.getElementById('transform-function').value;
                     if (newRule.function === 'CONCAT') {
                         const columns = Array.from(document.querySelectorAll('.concat-col-select')).map(sel => sel.value);
-                        newRule.params = {
-                            columns: columns,
-                            separator: document.getElementById('transform-param-separator').value
-                        };
+                        newRule.params = { columns, separator: document.getElementById('transform-param-separator').value };
                     }
                 } else if (type === 'lookup') {
-                    newRule.lookup_source_table = document.getElementById('lookup-source-table').value;
+                    newRule.lookup_source_table = document.getElementById('lookup-table').value;
+                    newRule.where_col = document.getElementById('lookup-where-col').value;
+                    newRule.get_col = document.getElementById('lookup-get-col').value;
+                    newRule.match_col = document.getElementById('lookup-match-col').value;
+                    newRule.default = document.getElementById('lookup-default-val').value;
+                    newRule.source_table = findPrimarySourceTable(pgTable);
+                } else if (type === 'target_lookup') {
+                    newRule.lookup_table = document.getElementById('lookup-table').value;
                     newRule.where_col = document.getElementById('lookup-where-col').value;
                     newRule.get_col = document.getElementById('lookup-get-col').value;
                     newRule.match_col = document.getElementById('lookup-match-col').value;
