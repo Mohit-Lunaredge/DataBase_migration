@@ -22,7 +22,7 @@
         .data-type { font-size: 0.75rem; color: #718096; margin-left: 0.5rem; }
         .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 50; }
         .modal-content { background: white; padding: 2rem; border-radius: 0.5rem; width: 90vw; max-width: 600px; max-height: 90vh; overflow-y: auto; }
-        .mapping-info-badge { font-size: 0.65rem; font-weight: bold; color: #2c5282; background-color: #bee3f8; padding: 2px 4px; border-radius: 4px; margin-left: auto; }
+        .mapping-info-badge { font-size: 0.65rem; font-weight: bold; color: #2c5282; background-color: #bee3f8; padding: 2px 4px; border-radius: 4px; margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; display: inline-block; vertical-align: middle;}
         .not-null-badge { font-size: 0.65rem; font-weight: bold; color: #c53030; background-color: #fed7d7; padding: 2px 4px; border-radius: 4px; margin-left: 0.5rem; }
         .data-preview-list { max-height: 400px; overflow-y: auto; }
     </style>
@@ -247,7 +247,6 @@
                 pg_config: pgConnectionDetails, 
                 mapping_rules: mappingRules,
                 mysql_dump_file_path: filePath,
-                pg_schema: postgresSchemaData,
                 truncate_tables: document.getElementById('truncateCheckbox').checked,
                 handle_conflicts: document.getElementById('upsertCheckbox').checked,
                 filters: migrationFilters
@@ -296,7 +295,7 @@
         
         function toggleErrorDetails(elementId) { document.getElementById(elementId).classList.toggle('hidden'); }
         function escapeHtml(unsafe) { 
-            if (typeof unsafe !== 'string') return unsafe;
+            if (typeof unsafe !== 'string') return unsafe === null ? '' : unsafe;
             return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); 
         }
 
@@ -358,6 +357,7 @@
                 });
             });
             dropdownButton.addEventListener('click', (e) => { e.stopPropagation(); dropdownPanel.classList.toggle('hidden'); });
+            document.body.addEventListener('click', () => dropdownPanel.classList.add('hidden'));
             dropdownPanel.addEventListener('click', (e) => e.stopPropagation());
             dropdownContainer.appendChild(dropdownButton);
             dropdownContainer.appendChild(dropdownPanel);
@@ -386,8 +386,6 @@
             drawMappingLines();
         }
 
-        document.addEventListener('click', () => { document.querySelectorAll('.absolute.bg-white.border').forEach(panel => panel.classList.add('hidden')); });
-
         function createSchemaTableElement(tableName, columns, type) {
             const tableDiv = document.createElement('div');
             tableDiv.id = `${type}-table-${tableName}`;
@@ -409,7 +407,7 @@
             colsList.className = 'mt-2 space-y-2';
             columns.forEach(col => {
                 const colItem = document.createElement('div');
-                colItem.className = 'column-item p-2 border rounded-md';
+                colItem.className = 'column-item p-2 border rounded-md cursor-pointer';
                 
                 const mainContent = document.createElement('div');
                 mainContent.className = 'flex justify-between items-center';
@@ -426,13 +424,12 @@
                     colItem.onclick = () => openMappingPanel(tableName, col);
                     colItem.addEventListener('dragover', handleDragOver);
                     colItem.addEventListener('drop', handleDrop);
-
                 } else {
                     colItem.id = `mysql-${tableName}-${col.name}`;
                     nameAndType.innerHTML = `
                         <span>${col.name}</span> 
                         <span class="data-type">(${col.type})</span>
-                        <button onclick="viewColumnData('${tableName}', '${col.name}')" class="ml-2 text-gray-400 hover:text-blue-600" title="Preview Data">
+                        <button onclick="event.stopPropagation(); viewColumnData('${tableName}', '${col.name}')" class="ml-2 text-gray-400 hover:text-blue-600" title="Preview Data">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                         </button>
                     `;
@@ -450,7 +447,11 @@
         }
         
         // --- Drag & Drop ---
-        function handleDragStart(e) { e.dataTransfer.setData('text/plain', e.target.id); }
+        function handleDragStart(e) { 
+            e.dataTransfer.setData('text/plain', e.currentTarget.id); 
+            e.currentTarget.classList.add('dragging');
+        }
+        document.addEventListener('dragend', () => document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging')));
         function handleDragOver(e) { e.preventDefault(); }
         function handleDrop(e) {
             e.preventDefault();
@@ -462,32 +463,27 @@
             const pgCol = targetEl.dataset.colName;
 
             if (!mappingRules[pgTable]) mappingRules[pgTable] = {};
-            mappingRules[pgTable][pgCol] = {
-                type: 'direct',
-                value: mysqlCol,
-                source_table: mysqlTable
-            };
+            mappingRules[pgTable][pgCol] = { type: 'direct', value: mysqlCol, source_table: mysqlTable };
             
             document.querySelector(`#mysql-table-filter input[value="${mysqlTable}"]`).checked = true;
             document.querySelector(`#pg-table-filter input[value="${pgTable}"]`).checked = true;
             updateSourceTableVisibility();
             updateTargetTableVisibility();
             
-            setTimeout(updateColumnUIs, 50);
+            setTimeout(updateColumnUIs, 50); // Timeout to allow DOM update
         }
 
         function handleSourceColumnDoubleClick(e) {
             const sourceEl = e.currentTarget;
             if (!sourceEl || !sourceEl.id) return;
-
             const [, mysqlTable, mysqlCol] = sourceEl.id.split('-');
-
             if (!mysqlTable || !mysqlCol) return;
 
             for (const pgTable in mappingRules) {
                 for (const pgCol in mappingRules[pgTable]) {
                     const rule = mappingRules[pgTable][pgCol];
-                    if (rule.type === 'direct' && rule.source_table === mysqlTable && rule.value === mysqlCol) {
+                    if ((rule.type === 'direct' && rule.source_table === mysqlTable && rule.value === mysqlCol) ||
+                        (rule.type === 'transformation' && rule.source_table === mysqlTable && rule.params.columns.includes(mysqlCol))) {
                         delete mappingRules[pgTable][pgCol];
                     }
                 }
@@ -500,67 +496,74 @@
 
         function updateColumnUIs() {
             document.querySelectorAll('.mapping-info-badge').forEach(b => b.remove());
-            document.querySelectorAll('.mapped').forEach(el => el.classList.remove('mapped'));
-            document.querySelectorAll('.mapped-target').forEach(el => el.classList.remove('mapped-target'));
-            drawMappingLines();
-
+            document.querySelectorAll('.mapped, .mapped-target').forEach(el => el.classList.remove('mapped', 'mapped-target'));
+            
             for(const pgTable in mappingRules) {
                 for(const pgCol in mappingRules[pgTable]) {
                     const rule = mappingRules[pgTable][pgCol];
                     const targetEl = document.getElementById(`pg-${pgTable}-${pgCol}`);
-                    if (targetEl) {
-                        let badgeText = `[${rule.type.toUpperCase()}]`;
-                        if(rule.type === 'direct') {
-                            badgeText = `[${rule.source_table}.${rule.value}]`;
-                        } else if(rule.type === 'static') {
-                            badgeText = `[STATIC: "${rule.value}"]`;
-                        } else if (rule.type === 'transformation') {
-                            badgeText = `[TRANSFORM: ${rule.function}]`;
-                        }
-                        
-                        const badge = document.createElement('span');
-                        badge.className = 'mapping-info-badge';
-                        badge.textContent = badgeText;
-                        targetEl.querySelector('.flex').appendChild(badge);
-                        targetEl.classList.add('mapped-target');
+                    if (!targetEl) continue;
 
-                        if (rule.type === 'direct') {
-                            const sourceEl = document.getElementById(`mysql-${rule.source_table}-${rule.value}`);
+                    let badgeText = `[${rule.type.toUpperCase()}]`;
+                    if(rule.type === 'direct') {
+                        badgeText = `[${rule.source_table}.${rule.value}]`;
+                        const sourceEl = document.getElementById(`mysql-${rule.source_table}-${rule.value}`);
+                        if(sourceEl) sourceEl.classList.add('mapped');
+                    } else if(rule.type === 'static') {
+                        badgeText = `[STATIC]`;
+                    } else if (rule.type === 'transformation') {
+                        badgeText = `[${rule.function}]`;
+                        rule.params.columns.forEach(sourceColName => {
+                            const sourceEl = document.getElementById(`mysql-${rule.source_table}-${sourceColName}`);
                             if(sourceEl) sourceEl.classList.add('mapped');
-                        } else if (rule.type === 'transformation') {
-                            rule.params.columns.forEach(sourceColName => {
-                                const sourceEl = document.getElementById(`mysql-${rule.source_table}-${sourceColName}`);
-                                if(sourceEl) sourceEl.classList.add('mapped');
-                            });
-                        }
+                        });
+                    } else if (rule.type === 'lookup') {
+                        badgeText = `[LOOKUP]`;
+                        const sourceEl = document.getElementById(`mysql-${rule.source_table}-${rule.match_col}`);
+                        if(sourceEl) sourceEl.classList.add('mapped');
                     }
+                    
+                    const badge = document.createElement('span');
+                    badge.className = 'mapping-info-badge';
+                    badge.textContent = badgeText;
+                    badge.title = JSON.stringify(rule, null, 2);
+                    targetEl.querySelector('.flex').appendChild(badge);
+                    targetEl.classList.add('mapped-target');
                 }
             }
+            drawMappingLines();
         }
         
         function drawMappingLines() {
             const svg = document.getElementById('mapping-svg');
-            svg.innerHTML = svg.querySelector('defs').outerHTML;
+            svg.innerHTML = svg.querySelector('defs').outerHTML; // Clear previous lines
             const containerRect = document.getElementById('mapping-container').getBoundingClientRect();
             for(const pgTable in mappingRules) {
                 for(const pgCol in mappingRules[pgTable]) {
                     const rule = mappingRules[pgTable][pgCol];
-                    if (rule.type === 'direct') {
-                        const sourceEl = document.getElementById(`mysql-${rule.source_table}-${rule.value}`);
-                        const targetEl = document.getElementById(`pg-${pgTable}-${pgCol}`);
-                        if (sourceEl && targetEl && sourceEl.offsetParent !== null && targetEl.offsetParent !== null) {
+                    const targetEl = document.getElementById(`pg-${pgTable}-${pgCol}`);
+                    if (!targetEl || targetEl.offsetParent === null) continue;
+
+                    const drawLineFromSource = (sourceEl) => {
+                        if (sourceEl && sourceEl.offsetParent !== null) {
                             const sourceRect = sourceEl.getBoundingClientRect();
                             const targetRect = targetEl.getBoundingClientRect();
-                            const x1 = sourceRect.right - containerRect.left;
-                            const y1 = sourceRect.top + sourceRect.height / 2 - containerRect.top;
-                            const x2 = targetRect.left - containerRect.left;
-                            const y2 = targetRect.top + targetRect.height / 2 - containerRect.top;
                             const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                            line.setAttribute('x1', x1); line.setAttribute('y1', y1);
-                            line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+                            line.setAttribute('x1', sourceRect.right - containerRect.left);
+                            line.setAttribute('y1', sourceRect.top + sourceRect.height / 2 - containerRect.top);
+                            line.setAttribute('x2', targetRect.left - containerRect.left);
+                            line.setAttribute('y2', targetRect.top + targetRect.height / 2 - containerRect.top);
                             line.classList.add('mapped-line');
                             svg.appendChild(line);
                         }
+                    };
+
+                    if (rule.type === 'direct') {
+                        drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${rule.value}`));
+                    } else if (rule.type === 'transformation') {
+                        rule.params.columns.forEach(col => drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${col}`)));
+                    } else if (rule.type === 'lookup') {
+                        drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${rule.match_col}`));
                     }
                 }
             }
@@ -573,24 +576,19 @@
             const content = document.getElementById('mapping-panel-content');
             
             let html = `<h2 class="text-2xl font-bold mb-4">Set Mapping for ${pgTable}.${pgCol.name}</h2>`;
-            
-            let optionsHtml = '<option value="none">-- None --</option>';
-            optionsHtml += '<option value="direct">Direct Mapping (from Source)</option>';
-            optionsHtml += `
-                <option value="transformation">Transformation</option>
-                <option value="static">Static Value</option>
-                <option value="auto-increment">Auto-Increment</option>
-                <option value="lookup">Lookup from Target Table</option>
-            `;
-
             html += `
                 <div class="mb-4">
                     <label class="block font-semibold mb-1">Mapping Type</label>
                     <select id="mapping-type-selector" class="w-full p-2 border rounded-md">
-                        ${optionsHtml}
+                        <option value="none">-- None --</option>
+                        <option value="direct">Direct Mapping (from Source)</option>
+                        <option value="transformation">Transformation</option>
+                        <option value="lookup">Lookup from Target Table</option>
+                        <option value="static">Static Value</option>
+                        <option value="auto-increment">Auto-Increment</option>
                     </select>
                 </div>
-                <div id="mapping-options" class="space-y-4"></div>
+                <div id="mapping-options" class="space-y-4 border-t pt-4"></div>
                 <div class="flex justify-end space-x-4 mt-6">
                     <button onclick="closeMappingPanelModal()" class="px-4 py-2 bg-gray-200 rounded-md">Cancel</button>
                     <button onclick="saveMappingRule('${pgTable}', '${pgCol.name}')" class="px-4 py-2 bg-blue-600 text-white rounded-md">Save Mapping</button>
@@ -616,70 +614,102 @@
             const currentRule = mappingRules[pgTable]?.[pgCol] || {};
             let html = '';
 
+            const createSelect = (id, label, options) => `<div><label class="block font-semibold text-sm mb-1">${label}</label><select id="${id}" class="w-full p-2 border rounded-md">${options}</select></div>`;
+            const createInput = (id, label, value, type='text') => `<div><label class="block font-semibold text-sm mb-1">${label}</label><input type="${type}" id="${id}" class="w-full p-2 border rounded-md" value="${escapeHtml(value)}"></div>`;
+
             if (type === 'direct') {
-                html = `<div><label class="block font-semibold">Source Table</label><select id="direct-source-table" class="w-full p-2 border rounded-md"></select></div>`;
-                html += `<div><label class="block font-semibold">Source Column</label><select id="direct-source-col" class="w-full p-2 border rounded-md"></select></div>`;
+                const tableOptions = Object.keys(mysqlSchemaData).map(t => `<option value="${t}">${t}</option>`).join('');
+                html = createSelect('direct-source-table', 'Source Table', tableOptions);
+                html += `<div><label class="block font-semibold text-sm mb-1">Source Column</label><select id="direct-source-col" class="w-full p-2 border rounded-md"></select></div>`;
             } else if (type === 'static') {
-                html = `<div><label class="block font-semibold">Static Value</label><input type="text" id="static-value" class="w-full p-2 border rounded-md" value="${currentRule.value || ''}"></div>`;
+                html = createInput('static-value', 'Static Value', currentRule.value || '');
             } else if (type === 'auto-increment') {
-                html = `<div><label class="block font-semibold">Start Number</label><input type="number" id="auto-inc-start" class="w-full p-2 border rounded-md" value="${currentRule.start || 1}"></div>`;
-                html += `<div><label class="block font-semibold">Step</label><input type="number" id="auto-inc-step" class="w-full p-2 border rounded-md" value="${currentRule.step || 1}"></div>`;
+                html = createInput('auto-inc-start', 'Start Number', currentRule.start || 1, 'number');
+                html += createInput('auto-inc-step', 'Step', currentRule.step || 1, 'number');
             } else if (type === 'lookup') {
-                html = `<div><label class="block font-semibold">1. Get value from column:</label><select id="lookup-get-col" class="w-full p-2 border rounded-md"></select></div>`;
-                html += `<div><label class="block font-semibold">2. In this target table:</label><select id="lookup-table" class="w-full p-2 border rounded-md"></select></div>`;
-                html += `<div><label class="block font-semibold">3. Where its column:</label><select id="lookup-where-col" class="w-full p-2 border rounded-md"></select></div>`;
-                html += `<div><label class="block font-semibold">4. Matches this source column:</label><select id="lookup-match-col" class="w-full p-2 border rounded-md"></select></div>`;
+                const pgTableOptions = Object.keys(postgresSchemaData).map(t => `<option value="${t}">${t}</option>`).join('');
+                const mySqlTableOptions = Object.keys(mysqlSchemaData).map(t => `<option value="${t}">${t}</option>`).join('');
+                html = `
+                    <p class="text-sm font-bold text-gray-700">1. Find a row in a PostgreSQL table...</p>
+                    ${createSelect('lookup-table', 'Target Lookup Table', pgTableOptions)}
+                    ${createSelect('lookup-where-col', '...where this column...', '')}
+                    <p class="text-sm font-bold text-gray-700 mt-2">2. ...matches a value from the source row.</p>
+                    ${createSelect('lookup-source-table', 'Source Table for Match Value', mySqlTableOptions)}
+                    ${createSelect('lookup-match-col', '...using this source column.', '')}
+                    <p class="text-sm font-bold text-gray-700 mt-2">3. Then get the result.</p>
+                    ${createSelect('lookup-get-col', 'Get value from this column in the found row', '')}
+                    ${createInput('lookup-default-val', 'Default value if not found (optional)', currentRule.default || '')}
+                `;
             } else if (type === 'transformation') {
-                html = `<div><label class="block font-semibold">Source Table</label><select id="transform-source-table" class="w-full p-2 border rounded-md"></select></div>`;
-                html += `<div><label class="block font-semibold">Function</label><select id="transform-function" class="w-full p-2 border rounded-md"><option value="CONCAT">CONCAT</option></select></div>`;
-                html += `<div id="transform-params" class="p-2 border rounded-md bg-gray-50 space-y-2"></div>`;
+                const tableOptions = Object.keys(mysqlSchemaData).map(t => `<option value="${t}">${t}</option>`).join('');
+                html = createSelect('transform-source-table', 'Source Table', tableOptions);
+                html += createSelect('transform-function', 'Function', '<option value="CONCAT">CONCAT</option>');
+                html += `<div id="transform-params" class="p-2 border rounded-md bg-gray-50 space-y-2 mt-2"></div>`;
             }
             container.innerHTML = html;
 
+            // Add dynamic event listeners and populate selects
             if (type === 'direct') {
                 const tableSelect = document.getElementById('direct-source-table');
-                Object.keys(mysqlSchemaData).forEach(t => tableSelect.innerHTML += `<option value="${t}">${t}</option>`);
-                tableSelect.onchange = () => {
-                    const colSelect = document.getElementById('direct-source-col');
+                const colSelect = document.getElementById('direct-source-col');
+                const updateCols = () => {
                     colSelect.innerHTML = '';
                     mysqlSchemaData[tableSelect.value].columns.forEach(c => colSelect.innerHTML += `<option value="${c.name}">${c.name}</option>`);
                 };
+                tableSelect.onchange = updateCols;
                 if (currentRule.source_table) tableSelect.value = currentRule.source_table;
-                tableSelect.dispatchEvent(new Event('change'));
-                if (currentRule.value) document.getElementById('direct-source-col').value = currentRule.value;
+                updateCols();
+                if (currentRule.value) colSelect.value = currentRule.value;
+            } else if (type === 'lookup') {
+                const lookupTableSelect = document.getElementById('lookup-table');
+                const whereColSelect = document.getElementById('lookup-where-col');
+                const getColSelect = document.getElementById('lookup-get-col');
+                const sourceTableSelect = document.getElementById('lookup-source-table');
+                const matchColSelect = document.getElementById('lookup-match-col');
+
+                const updateTargetCols = () => {
+                    const selectedTable = lookupTableSelect.value;
+                    const cols = postgresSchemaData[selectedTable]?.columns || [];
+                    const options = cols.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+                    whereColSelect.innerHTML = options;
+                    getColSelect.innerHTML = options;
+                };
+                const updateSourceCols = () => {
+                    const selectedTable = sourceTableSelect.value;
+                    const cols = mysqlSchemaData[selectedTable]?.columns || [];
+                    matchColSelect.innerHTML = cols.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+                };
+
+                lookupTableSelect.onchange = updateTargetCols;
+                sourceTableSelect.onchange = updateSourceCols;
+
+                if(currentRule.lookup_table) lookupTableSelect.value = currentRule.lookup_table;
+                updateTargetCols();
+                if(currentRule.where_col) whereColSelect.value = currentRule.where_col;
+                if(currentRule.get_col) getColSelect.value = currentRule.get_col;
+
+                if(currentRule.source_table) sourceTableSelect.value = currentRule.source_table;
+                updateSourceCols();
+                if(currentRule.match_col) matchColSelect.value = currentRule.match_col;
 
             } else if (type === 'transformation') {
                 const tableSelect = document.getElementById('transform-source-table');
-                Object.keys(mysqlSchemaData).forEach(t => tableSelect.innerHTML += `<option value="${t}">${t}</option>`);
-                
                 const functionSelect = document.getElementById('transform-function');
-                
                 const renderTransformParams = () => {
                     const paramsContainer = document.getElementById('transform-params');
-                    const selectedFunc = functionSelect.value;
-                    const selectedTable = tableSelect.value;
-                    let paramsHtml = '';
-                    if (selectedFunc === 'CONCAT') {
-                        paramsHtml = `
+                    if (functionSelect.value === 'CONCAT') {
+                        const colOptions = mysqlSchemaData[tableSelect.value].columns.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+                        paramsContainer.innerHTML = `
                             <p class="text-sm font-medium">CONCAT Parameters</p>
-                            <div><label class="text-sm">Column 1:</label><select class="transform-param-col w-full p-1 border rounded-md"></select></div>
-                            <div><label class="text-sm">Column 2:</label><select class="transform-param-col w-full p-1 border rounded-md"></select></div>
-                            <div><label class="text-sm">Separator:</label><input type="text" id="transform-param-separator" class="w-full p-1 border rounded-md" value=" "></div>
+                            ${createSelect('transform-param-col1', 'Column 1', colOptions)}
+                            ${createSelect('transform-param-col2', 'Column 2', colOptions)}
+                            ${createInput('transform-param-separator', 'Separator', currentRule.params?.separator || ' ')}
                         `;
                     }
-                    paramsContainer.innerHTML = paramsHtml;
-
-                    if (selectedFunc === 'CONCAT') {
-                        const colSelectors = paramsContainer.querySelectorAll('.transform-param-col');
-                        colSelectors.forEach(sel => {
-                            sel.innerHTML = '';
-                            mysqlSchemaData[selectedTable].columns.forEach(c => sel.innerHTML += `<option value="${c.name}">${c.name}</option>`);
-                        });
-                    }
                 };
-                
                 tableSelect.onchange = renderTransformParams;
                 functionSelect.onchange = renderTransformParams;
+                if(currentRule.source_table) tableSelect.value = currentRule.source_table;
                 renderTransformParams();
             }
         }
@@ -690,22 +720,34 @@
             
             if (type === 'none') {
                 delete mappingRules[pgTable][pgCol];
-            } else if (type === 'direct') {
-                mappingRules[pgTable][pgCol] = { type: 'direct', value: document.getElementById('direct-source-col').value, source_table: document.getElementById('direct-source-table').value };
-            } else if (type === 'static') {
-                mappingRules[pgTable][pgCol] = { type: 'static', value: document.getElementById('static-value').value };
-            } else if (type === 'auto-increment') {
-                mappingRules[pgTable][pgCol] = { type: 'auto-increment', start: parseInt(document.getElementById('auto-inc-start').value), step: parseInt(document.getElementById('auto-inc-step').value) };
-            } else if (type === 'transformation') {
-                const sourceTable = document.getElementById('transform-source-table').value;
-                const func = document.getElementById('transform-function').value;
-                let params = {};
-                if (func === 'CONCAT') {
-                    const columns = Array.from(document.querySelectorAll('.transform-param-col')).map(sel => sel.value);
-                    const separator = document.getElementById('transform-param-separator').value;
-                    params = { columns, separator };
+            } else {
+                let newRule = { type };
+                if (type === 'direct') {
+                    newRule.value = document.getElementById('direct-source-col').value;
+                    newRule.source_table = document.getElementById('direct-source-table').value;
+                } else if (type === 'static') {
+                    newRule.value = document.getElementById('static-value').value;
+                } else if (type === 'auto-increment') {
+                    newRule.start = parseInt(document.getElementById('auto-inc-start').value);
+                    newRule.step = parseInt(document.getElementById('auto-inc-step').value);
+                } else if (type === 'transformation') {
+                    newRule.source_table = document.getElementById('transform-source-table').value;
+                    newRule.function = document.getElementById('transform-function').value;
+                    if (newRule.function === 'CONCAT') {
+                        newRule.params = {
+                            columns: [document.getElementById('transform-param-col1').value, document.getElementById('transform-param-col2').value],
+                            separator: document.getElementById('transform-param-separator').value
+                        };
+                    }
+                } else if (type === 'lookup') {
+                    newRule.lookup_table = document.getElementById('lookup-table').value;
+                    newRule.where_col = document.getElementById('lookup-where-col').value;
+                    newRule.get_col = document.getElementById('lookup-get-col').value;
+                    newRule.source_table = document.getElementById('lookup-source-table').value;
+                    newRule.match_col = document.getElementById('lookup-match-col').value;
+                    newRule.default = document.getElementById('lookup-default-val').value;
                 }
-                mappingRules[pgTable][pgCol] = { type: 'transformation', function: func, source_table: sourceTable, params };
+                mappingRules[pgTable][pgCol] = newRule;
             }
             
             updateColumnUIs();
@@ -715,21 +757,45 @@
         function openSettingsModal(tableName) {
             const modal = document.getElementById('settings-modal');
             const content = document.getElementById('settings-modal-content');
-            const tableData = mysqlSchemaData[tableName];
-            const tableFilters = migrationFilters[tableName] || { where: '', replacements: {} };
+            const tableFilters = migrationFilters[tableName] || {};
+            const tableSort = tableFilters.sort || {};
+
+            let colOptions = '<option value="">-- No Sorting --</option>';
+            mysqlSchemaData[tableName].columns.forEach(col => {
+                colOptions += `<option value="${col.name}" ${tableSort.column === col.name ? 'selected' : ''}>${col.name}</option>`;
+            });
+
             let html = `<h2 class="text-2xl font-bold mb-4">Settings for ${tableName}</h2>`;
+            
+            html += `<div class="mb-4 border-b pb-4">
+                        <h3 class="font-semibold mb-2">Sort Source Data</h3>
+                        <p class="text-sm text-gray-600 mb-2">Sort the data from this table before processing. Useful for ordered insertions.</p>
+                        <div class="flex space-x-2">
+                            <select id="sort-column-select" class="w-2/3 p-2 border rounded-md">${colOptions}</select>
+                            <select id="sort-order-select" class="w-1/3 p-2 border rounded-md">
+                                <option value="ASC" ${tableSort.order === 'ASC' ? 'selected' : ''}>Ascending</option>
+                                <option value="DESC" ${tableSort.order === 'DESC' ? 'selected' : ''}>Descending</option>
+                            </select>
+                        </div>
+                     </div>`;
+
             html += `<div class="mb-6"><label class="block font-semibold mb-1">WHERE Clause (Filter Rows)</label>`;
-            html += `<input type="text" id="where-clause-input" class="w-full p-2 border rounded-md" placeholder="e.g., role = 'teacher' AND status != 'inactive'" value="${escapeHtml(tableFilters.where)}"></div>`;
-            html += `<div class="mb-4"><h3 class="font-semibold mb-2">Value Replacements</h3>`;
-            tableData.columns.forEach(col => {
+            html += `<input type="text" id="where-clause-input" class="w-full p-2 border rounded-md" placeholder="e.g., role = 'teacher' AND status != 'inactive'" value="${escapeHtml(tableFilters.where || '')}"></div>`;
+            
+            html += `<div class="mb-4"><h3 class="font-semibold mb-2">Value Replacements</h3><div class="space-y-3">`;
+            mysqlSchemaData[tableName].columns.forEach(col => {
                 html += `<div class="p-2 border-t"><p class="font-medium">${col.name}</p><div id="replacements-for-${col.name}" class="space-y-2 mt-2"></div>`;
                 html += `<button onclick="addReplacementRule('${tableName}', '${col.name}')" class="text-sm text-blue-600 hover:underline mt-2">+ Add Replacement</button></div>`;
             });
-            html += `</div>`;
+            html += `</div></div>`;
             html += `<div class="flex justify-end space-x-4 mt-6"><button onclick="closeSettingsModal()" class="px-4 py-2 bg-gray-200 rounded-md">Cancel</button><button onclick="saveSettings('${tableName}')" class="px-4 py-2 bg-blue-600 text-white rounded-md">Save Settings</button></div>`;
+            
             content.innerHTML = html;
-            for (const colName in tableFilters.replacements) {
-                tableFilters.replacements[colName].forEach(rule => addReplacementRule(tableName, colName, rule.find, rule.replace));
+            
+            if (tableFilters.replacements) {
+                for (const colName in tableFilters.replacements) {
+                    tableFilters.replacements[colName].forEach(rule => addReplacementRule(tableName, colName, rule.find, rule.replace));
+                }
             }
             modal.classList.remove('hidden');
         }
@@ -740,15 +806,33 @@
             ruleDiv.className = 'flex items-center space-x-2';
             ruleDiv.innerHTML = `
                 <input type="text" class="w-1/2 p-1 border rounded-md text-sm find-input" placeholder="Find this value" value="${escapeHtml(findVal)}">
-                <span class="font-bold">→</span>
+                <span class="font-bold text-gray-500">→</span>
                 <input type="text" class="w-1/2 p-1 border rounded-md text-sm replace-input" placeholder="Replace with this" value="${escapeHtml(replaceVal)}">
-                <button onclick="this.parentElement.remove()" class="text-red-500 hover:text-red-700">&times;</button>
+                <button onclick="this.parentElement.remove()" class="text-red-500 hover:text-red-700 font-bold">&times;</button>
             `;
             container.appendChild(ruleDiv);
         }
 
         function saveSettings(tableName) {
+            // Save sorting settings
+            const sortColumn = document.getElementById('sort-column-select').value;
+            const sortOrder = document.getElementById('sort-order-select').value;
+            
+            if (!migrationFilters[tableName]) {
+                migrationFilters[tableName] = {};
+            }
+
+            if (sortColumn) {
+                migrationFilters[tableName].sort = { column: sortColumn, order: sortOrder };
+            } else {
+                delete migrationFilters[tableName].sort;
+            }
+
+            // Save WHERE clause
             const whereClause = document.getElementById('where-clause-input').value;
+            migrationFilters[tableName].where = whereClause;
+
+            // Save replacements
             const replacements = {};
             mysqlSchemaData[tableName].columns.forEach(col => {
                 const container = document.getElementById(`replacements-for-${col.name}`);
@@ -760,7 +844,8 @@
                 });
                 if (rules.length > 0) { replacements[col.name] = rules; }
             });
-            migrationFilters[tableName] = { where: whereClause, replacements: replacements };
+            migrationFilters[tableName].replacements = replacements;
+
             closeSettingsModal();
         }
         
@@ -774,12 +859,12 @@
             const customPathInput = document.getElementById('sqlFilePathInput');
             let payload = {};
             if (selector.value === 'custom') {
-                if (!customPathInput.value) { alert("Please enter a custom file path."); return; }
                 payload = { path: customPathInput.value, tableName, columnName };
             } else if (selector.value) {
                 payload = { filename: selector.value, tableName, columnName };
             } else {
                 alert("Please select a SQL file first.");
+                closeDataPreviewModal();
                 return;
             }
 
@@ -788,7 +873,7 @@
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Failed to fetch column data.');
                 
-                let listHtml = '<p class="text-sm text-gray-600 mb-2">Showing ' + data.unique_values.length + ' unique values (out of ' + data.total_rows + ' total rows).</p>';
+                let listHtml = `<p class="text-sm text-gray-600 mb-2">Showing ${data.unique_values.length} unique values (out of ${data.total_rows} total rows).</p>`;
                 listHtml += '<ul class="data-preview-list border rounded-md p-2 bg-gray-50">';
                 if (data.unique_values.length === 0) {
                     listHtml += '<li class="p-1 text-gray-500">No data found for this column.</li>';
@@ -800,15 +885,14 @@
                 listHtml += '</ul>';
 
                 content.innerHTML = `
-                    <h2 class="text-2xl font-bold mb-4">Previewing ${tableName}.${columnName}</h2>
-                    ${listHtml}
-                    <div class="flex justify-end mt-6">
-                        <button onclick="closeDataPreviewModal()" class="px-4 py-2 bg-gray-200 rounded-md">Close</button>
+                    <div class="flex justify-between items-start">
+                        <h2 class="text-2xl font-bold mb-4">Previewing ${tableName}.${columnName}</h2>
+                        <button onclick="closeDataPreviewModal()" class="text-2xl font-bold">&times;</button>
                     </div>
+                    ${listHtml}
                 `;
-
             } catch (error) {
-                content.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
+                content.innerHTML = `<p class="text-red-500">Error: ${error.message}</p> <button onclick="closeDataPreviewModal()" class="mt-4 px-4 py-2 bg-gray-200 rounded-md">Close</button>`;
             }
         }
 
