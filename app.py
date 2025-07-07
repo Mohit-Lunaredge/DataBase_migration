@@ -124,16 +124,12 @@ def get_tables():
 def run_migration():
     """The main endpoint to trigger the data migration process based on user configuration."""
     config = request.json
-    
     file_path_from_client = config.get('mysql_dump_file_path')
-    
     if not os.path.isabs(file_path_from_client):
         full_file_path = os.path.join(SQL_FILES_DIR, file_path_from_client)
     else:
         full_file_path = file_path_from_client
-
     config['mysql_dump_file_path'] = full_file_path
-
     try:
         results = _perform_migration(config)
         return jsonify({"message": "Migration processing complete!", "summary": results})
@@ -146,8 +142,8 @@ def run_migration():
 @app.route('/api/get_column_data', methods=['POST'])
 def get_column_data():
     """
-    Parses a specific table from a MySQL dump file to extract all unique
-    values from a given column. This is used for data preview in the UI.
+    Parses a specific table from a MySQL dump file to extract all unique values 
+    from a given column. This is used for data preview in the UI.
     """
     data = request.json
     filename = data.get('filename')
@@ -170,18 +166,15 @@ def get_column_data():
 
     unique_values = set()
     total_rows = 0
-    
     insert_statement_regex = re.compile(
-        r"INSERT INTO\s+[`\"]?{}[`\"]?.*?;".format(re.escape(table_name_to_find)), 
+        r"INSERT INTO\s+[`\"]?{}[`\"]?.*?;".format(re.escape(table_name_to_find)),
         re.IGNORECASE | re.DOTALL
     )
-    
+
     for statement_match in insert_statement_regex.finditer(full_content):
         _, mysql_cols, all_rows = _parse_mysql_insert(statement_match.group(0))
-        
         if not mysql_cols:
             continue
-
         try:
             col_index = mysql_cols.index(column_name_to_find)
             for row in all_rows:
@@ -190,7 +183,7 @@ def get_column_data():
                     unique_values.add(row[col_index])
         except (ValueError, IndexError):
             continue
-
+            
     return jsonify({
         "unique_values": sorted(list(v for v in unique_values if v is not None)),
         "total_rows": total_rows
@@ -201,13 +194,17 @@ def get_column_data():
 def _parse_mysql_insert(statement_chunk):
     """Parses a MySQL INSERT statement into its table name, column list, and row data."""
     header_match = re.search(r"INSERT INTO\s+[`\"]?(\w+)[`\"]?\s*\((.*?)\)\s+VALUES", statement_chunk, re.IGNORECASE | re.DOTALL)
-    if not header_match: return None, None, None
+    if not header_match:
+        return None, None, None
+    
     table_name = header_match.group(1)
     columns = [c.strip().strip('`"') for c in header_match.group(2).split(',')]
-    values_keyword_match = re.search(r"VALUES", statement_chunk, re.IGNORECASE)
-    if not values_keyword_match: return table_name, columns, []
-    values_full_str = statement_chunk[values_keyword_match.end():]
     
+    values_keyword_match = re.search(r"VALUES", statement_chunk, re.IGNORECASE)
+    if not values_keyword_match:
+        return table_name, columns, []
+
+    values_full_str = statement_chunk[values_keyword_match.end():]
     value_tuples_regex = re.compile(r"\(( (?: [^()'] | ' (?: \\. | [^'\\] )* ' )*? )\)", re.VERBOSE)
     value_matches = value_tuples_regex.findall(values_full_str)
     
@@ -224,90 +221,21 @@ def _parse_mysql_insert(statement_chunk):
             else:
                 cleaned_values.append(v_stripped)
         all_rows.append(cleaned_values)
+        
     return table_name, columns, all_rows
 
-def _check_where_condition(row_dict, where_clause):
-    """Checks if a data row meets the conditions of a user-defined WHERE clause."""
-    if not where_clause: return True
-    conditions = re.split(r'\s+AND\s+', where_clause, flags=re.IGNORECASE)
-    for condition in conditions:
-        match = re.match(r"(\w+)\s*(!=| =)\s*(.*)", condition.strip())
-        if not match: continue
-        col, op, val = match.groups()
-        val = val.strip().strip("'\"")
-        row_val_str = str(row_dict.get(col)) if row_dict.get(col) is not None else ''
-        if op == '=' and row_val_str != val: return False
-        if op == '!=' and row_val_str == val: return False
-    return True
-
-def _apply_replacements(value, rules):
-    """Applies find-and-replace rules to a single value."""
-    if value is None: return None
-    val_str = str(value)
-    for rule in rules:
-        if val_str == rule.get('find'):
-            return rule.get('replace')
-    return value
-
-def _apply_transformation(row_dict, rule):
-    """Applies a data transformation function (e.g., CONCAT) to a row."""
-    if rule['function'] == 'CONCAT':
-        params = rule['params']
-        columns_to_concat = params.get('columns', [])
-        separator = params.get('separator', '')
-        values_to_concat = [str(row_dict.get(c)) for c in columns_to_concat if row_dict.get(c) is not None]
-        return separator.join(values_to_concat)
-    return None
-
-def _topological_sort(nodes, dependencies):
-    """Sorts nodes based on their dependencies to determine processing order."""
-    in_degree = {node: 0 for node in nodes}
-    adj = {node: [] for node in nodes}
-    
-    for node, deps in dependencies.items():
-        for dep in deps:
-            if dep not in nodes: continue
-            if node in adj.get(dep, []): continue
-            adj[dep].append(node)
-            in_degree[node] += 1
-            
-    queue = deque([node for node in nodes if in_degree[node] == 0])
-    sorted_order = []
-    while queue:
-        u = queue.popleft()
-        sorted_order.append(u)
-        for v in adj.get(u, []):
-            in_degree[v] -= 1
-            if in_degree[v] == 0:
-                queue.append(v)
-
-    if len(sorted_order) == len(nodes):
-        return sorted_order
-    else:
-        circular = {node for node, degree in in_degree.items() if degree > 0}
-        raise Exception(f"Circular dependency detected in table lookups involving: {circular}")
-
-def _sort_key_helper(item, column):
-    """A helper function to create a sort key that handles None, numbers, and strings."""
-    value = item.get(column)
-    if value is None:
-        return (0, float('-inf'))  # Group None values first
-    try:
-        # Attempt to convert to float for proper numeric sorting
-        return (1, float(value))
-    except (ValueError, TypeError):
-        # Fallback to string sorting for non-numeric values
-        return (2, str(value))
-
 def _perform_migration(config):
-    """The main migration process, iterating through tables and rows and applying rules."""
+    """
+    Performs data migration by first consolidating data from multiple source
+    tables into an intermediate structure, and then inserting the merged
+    records into the target PostgreSQL database.
+    """
     pg_conn = psycopg2.connect(**config['pg_config'])
     pg_cursor = pg_conn.cursor()
-    migration_summary = defaultdict(lambda: defaultdict(lambda: 0, {'errors': []}))
-    
+    migration_summary = defaultdict(lambda: defaultdict(int, {'errors': []}))
     mapping_rules = config.get('mapping_rules', {})
-    filters = config.get('filters', {})
-    
+
+    # 1. Load all data from the MySQL dump into an in-memory dictionary.
     with open(config['mysql_dump_file_path'], 'r', encoding='utf-8') as f:
         full_content = f.read()
     
@@ -317,22 +245,10 @@ def _perform_migration(config):
         mysql_table, mysql_cols, all_rows = _parse_mysql_insert(statement_match.group(0))
         if mysql_table and mysql_cols:
             for row in all_rows:
-                 if len(mysql_cols) == len(row):
+                if len(mysql_cols) == len(row):
                     all_data[mysql_table].append(dict(zip(mysql_cols, row)))
 
-    dependencies = defaultdict(set)
-    all_source_tables = set()
-    for pg_table, cols in mapping_rules.items():
-        for _, rule in cols.items():
-            source_table = rule.get('source_table')
-            if source_table:
-                all_source_tables.add(source_table)
-                if rule['type'] == 'lookup':
-                    dependencies[source_table].add(rule.get('lookup_source_table'))
-
-    order = _topological_sort(list(all_source_tables), dependencies)
-    print(f"Determined migration order: {order}")
-
+    # 2. Truncate target tables if requested by the user.
     if config.get('truncate_tables'):
         all_mapped_pg_tables = set(mapping_rules.keys())
         for pg_table in sorted(list(all_mapped_pg_tables), reverse=True):
@@ -341,101 +257,106 @@ def _perform_migration(config):
         pg_conn.commit()
         print("Target tables truncated.")
 
-    counters = {}
-    for pg_table, cols in mapping_rules.items():
-        for pg_col, rule in cols.items():
-            if rule['type'] == 'auto-increment':
-                counters[f"{pg_table}.{pg_col}"] = rule.get('start', 1)
+    # 3. Consolidate data into an intermediate structure.
+    # This structure will hold the complete, merged record for each user.
+    consolidated_data = {}
 
-    for mysql_table in order:
-        if not all_data[mysql_table]: continue
-        print(f"\nProcessing source table: {mysql_table}")
-        
-        # --- SORTING LOGIC ---
-        table_filters = filters.get(mysql_table, {})
-        sort_settings = table_filters.get('sort')
-        if sort_settings:
-            sort_column = sort_settings.get('column')
-            # Default to 'ASC', check if 'DESC'
-            is_desc = sort_settings.get('order', 'ASC').upper() == 'DESC'
-            if sort_column:
-                print(f"  -> Sorting by column '{sort_column}' { 'DESC' if is_desc else 'ASC' }")
-                all_data[mysql_table].sort(key=lambda item: _sort_key_helper(item, sort_column), reverse=is_desc)
-        # --- END SORTING LOGIC ---
+    # Phase A: Populate with base data from 'teacher_profile'
+    # We assume 'teacher_profile' is the primary source of user identity.
+    print("Phase 1: Consolidating data from 'teacher_profile'...")
+    for row in all_data.get('teacher_profile', []):
+        # The key for consolidation is the 'teacher_id', which should map to 'users.id'
+        key = row.get('teacher_id')
+        if key is not None:
+            consolidated_data[key] = {
+                'id': row.get('id'), # This is the teacher_profile.id
+                'full_name': row.get('name'),
+                'mobile': row.get('phone_no'),
+                # Initialize other fields to None; they will be enriched later.
+                'email': None,
+                'password_hash': None
+            }
+    print(f" -> Found {len(consolidated_data)} base records from 'teacher_profile'.")
 
-        pg_tables_for_source = {pg_tbl for pg_tbl, rules in mapping_rules.items() if any(r.get('source_table') == mysql_table for r in rules.values())}
+    # Phase B: Enrich with data from the 'users' table
+    print("Phase 2: Enriching with data from 'users'...")
+    enriched_count = 0
+    for row in all_data.get('users', []):
+        # The key for enrichment is the 'id' from the 'users' table.
+        key = row.get('id')
+        if key in consolidated_data:
+            consolidated_data[key]['email'] = row.get('email')
+            consolidated_data[key]['password_hash'] = row.get('password')
+            enriched_count += 1
+    print(f" -> Enriched {enriched_count} records with email/password.")
 
-        for pg_table in pg_tables_for_source:
-             print(f"  -> Migrating to target table: {pg_table}")
-             for row_dict in all_data[mysql_table]:
-                if not _check_where_condition(row_dict, table_filters.get('where', '')):
-                    migration_summary[pg_table]['filtered_out'] += 1
-                    continue
+    # 4. Main Logic: Iterate through each TARGET table defined in the mapping rules.
+    for pg_table, rules in mapping_rules.items():
+        print(f"\nProcessing target table: {pg_table}")
+
+        # 5. Iterate through the consolidated data and insert into the target table.
+        for user_id, user_data in consolidated_data.items():
+            
+            # This dictionary will hold the final values for the PostgreSQL row.
+            pg_values_dict = {}
+
+            # Build the row for insertion using the mapping rules and the consolidated data.
+            for pg_col, rule in rules.items():
+                value_found = None
+                if rule['type'] == 'direct':
+                    # Map the source column name from the rule to the key in our `user_data` dict
+                    source_col = rule['value']
+                    if source_col == 'teacher_id': value_found = user_id
+                    elif source_col == 'name': value_found = user_data.get('full_name')
+                    elif source_col == 'phone_no': value_found = user_data.get('mobile')
+                    elif source_col == 'email': value_found = user_data.get('email')
+                    elif source_col == 'password': value_found = user_data.get('password_hash')
+                    # This handles the mapping of teacher_profile.id to users.id
+                    elif source_col == 'id' and rule['source_table'] == 'teacher_profile':
+                        value_found = user_data.get('id')
+                    else:
+                        value_found = user_data.get(source_col)
+
+                elif rule['type'] == 'static':
+                    value_found = rule['value']
                 
-                transformed_row_dict = {col: _apply_replacements(val, table_filters.get('replacements', {}).get(col, [])) for col, val in row_dict.items()}
-                
-                pg_values_dict = {}
-                
-                for pg_col, rule in mapping_rules.get(pg_table, {}).items():
-                    if rule.get('source_table') != mysql_table and rule['type'] not in ['static', 'auto-increment', 'lookup']:
-                        continue
+                pg_values_dict[pg_col] = value_found
 
-                    try:
-                        if rule['type'] == 'direct':
-                            pg_values_dict[pg_col] = transformed_row_dict.get(rule['value'])
-                        elif rule['type'] == 'static':
-                            pg_values_dict[pg_col] = rule['value']
-                        elif rule['type'] == 'auto-increment':
-                            counter_key = f"{pg_table}.{pg_col}"
-                            pg_values_dict[pg_col] = counters[counter_key]
-                            counters[counter_key] += rule.get('step', 1)
-                        elif rule['type'] == 'transformation':
-                            pg_values_dict[pg_col] = _apply_transformation(transformed_row_dict, rule)
-                        elif rule['type'] == 'lookup':
-                            match_value = transformed_row_dict.get(rule['match_col'])
-                            lookup_query = f'SELECT "{rule["get_col"]}" FROM "{rule["lookup_table"]}" WHERE "{rule["where_col"]}" = %s'
-                            pg_cursor.execute(lookup_query, (match_value,))
-                            result = pg_cursor.fetchone()
-                            pg_values_dict[pg_col] = result[0] if result else rule.get('default', None)
-                    except (psycopg2.Error, KeyError) as e:
-                        pg_conn.rollback()
-                        migration_summary[pg_table]['failed'] += 1
-                        error_detail = {"error": f"Rule execution failed: {str(e)}", "rule": rule}
-                        if len(migration_summary[pg_table]['errors']) < 5:
-                            migration_summary[pg_table]['errors'].append(error_detail)
-                        continue
+            # 6. Insert the fully formed row into PostgreSQL.
+            final_pg_cols = list(pg_values_dict.keys())
+            final_pg_values = list(pg_values_dict.values())
+            quoted_columns = ', '.join(f'"{c}"' for c in final_pg_cols)
+            placeholders = ", ".join(["%s"] * len(final_pg_cols))
+            
+            insert_query = f'INSERT INTO "{pg_table}" ({quoted_columns}) VALUES ({placeholders})'
+            
+            if config.get('handle_conflicts'):
+                # Assuming 'id' is the conflict target. This might need to be made more flexible.
+                conflict_column = "id" 
+                update_clause_parts = [f'"{col}" = EXCLUDED."{col}"' for col in final_pg_cols if col != conflict_column]
+                if update_clause_parts:
+                    update_clause = ", ".join(update_clause_parts)
+                    insert_query += f' ON CONFLICT ("{conflict_column}") DO UPDATE SET {update_clause}'
 
-                if not pg_values_dict: continue
+            try:
+                pg_cursor.execute(insert_query, tuple(final_pg_values))
+                if config.get('handle_conflicts') and "UPDATE" in pg_cursor.statusmessage:
+                    migration_summary[pg_table]['updated'] += 1
+                elif pg_cursor.rowcount > 0:
+                    migration_summary[pg_table]['inserted'] += 1
+                pg_conn.commit()
+            except (psycopg2.Error, Exception) as e:
+                pg_conn.rollback()
+                migration_summary[pg_table]['failed'] += 1
+                if len(migration_summary[pg_table]['errors']) < 5:
+                    error_str = str(getattr(e, 'pgerror', str(e))).strip()
+                    error_detail = {
+                        "error": error_str,
+                        "query": insert_query,
+                        "values": [str(v) for v in final_pg_values]
+                    }
+                    migration_summary[pg_table]['errors'].append(error_detail)
 
-                final_pg_cols = list(pg_values_dict.keys())
-                final_pg_values = list(pg_values_dict.values())
-                
-                quoted_columns = ', '.join(f'"{c}"' for c in final_pg_cols)
-                placeholders = ", ".join(["%s"] * len(final_pg_cols))
-                insert_query = f'INSERT INTO "{pg_table}" ({quoted_columns}) VALUES ({placeholders})'
-                
-                if config.get('handle_conflicts'):
-                    conflict_column = "id" 
-                    update_clause_parts = [f'"{col}" = EXCLUDED."{col}"' for col in final_pg_cols if col != conflict_column]
-                    if update_clause_parts:
-                        update_clause = ", ".join(update_clause_parts)
-                        insert_query += f' ON CONFLICT ("{conflict_column}") DO UPDATE SET {update_clause}'
-
-                try:
-                    pg_cursor.execute(insert_query, tuple(final_pg_values))
-                    if config.get('handle_conflicts') and "UPDATE" in pg_cursor.statusmessage:
-                        migration_summary[pg_table]['updated'] += 1
-                    elif pg_cursor.rowcount > 0:
-                        migration_summary[pg_table]['inserted'] += 1
-                    pg_conn.commit()
-                except (psycopg2.Error, Exception) as e:
-                    pg_conn.rollback() 
-                    migration_summary[pg_table]['failed'] += 1
-                    if len(migration_summary[pg_table]['errors']) < 5:
-                        error_str = str(getattr(e, 'pgerror', str(e))).strip()
-                        error_detail = { "error": error_str, "query": insert_query, "values": [str(v) for v in final_pg_values] }
-                        migration_summary[pg_table]['errors'].append(error_detail)
-                
     pg_conn.close()
     return dict(migration_summary)
 
