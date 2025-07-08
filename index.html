@@ -21,10 +21,14 @@
         .error-details { background-color: #2d3748; color: #e2e8f0; padding: 0.75rem; margin-top: 0.5rem; border-radius: 0.25rem; font-family: 'Courier New', Courier, monospace; font-size: 0.8rem; white-space: pre-wrap; word-break: break-all; }
         .data-type { font-size: 0.75rem; color: #718096; margin-left: 0.5rem; }
         .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 50; }
-        .modal-content { background: white; padding: 2rem; border-radius: 0.5rem; width: 90vw; max-width: 600px; max-height: 90vh; overflow-y: auto; }
+        .modal-content { background: white; padding: 2rem; border-radius: 0.5rem; width: 90vw; max-width: 800px; max-height: 90vh; overflow-y: auto; }
         .mapping-info-badge { font-size: 0.65rem; font-weight: bold; color: #2c5282; background-color: #bee3f8; padding: 2px 4px; border-radius: 4px; margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; display: inline-block; vertical-align: middle;}
         .not-null-badge { font-size: 0.65rem; font-weight: bold; color: #c53030; background-color: #fed7d7; padding: 2px 4px; border-radius: 4px; margin-left: 0.5rem; }
         .data-preview-list { max-height: 400px; overflow-y: auto; }
+        .data-preview-table { width: 100%; border-collapse: collapse; }
+        .data-preview-table th, .data-preview-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .data-preview-table th { background-color: #f2f2f2; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800" onload="initializeStep1()">
@@ -110,7 +114,7 @@
 
     </div>
     
-    <!-- Modals -->
+    
     <div id="settings-modal" class="modal-overlay hidden">
         <div id="settings-modal-content" class="modal-content"></div>
     </div>
@@ -178,7 +182,6 @@
             const selector = document.getElementById('sqlFileSelector');
             const customPathInput = document.getElementById('sqlFilePathInput');
             let payload = {};
-
             if (selector.value === 'custom') {
                 if (!customPathInput.value) { alert("Please enter a custom file path."); return; }
                 payload = { path: customPathInput.value };
@@ -188,32 +191,53 @@
                 alert("Please select a SQL file.");
                 return;
             }
-
             showStatus("Parsing SQL file on server...", false);
             try {
-                const response = await fetch(`${API_BASE_URL}/api/parse_sql_file`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const response = await fetch(`${API_BASE_URL}/api/parse_sql_file`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Failed to parse file.');
                 mysqlSchemaData = data;
                 displayMysqlSchema();
                 showStatus("SQL file parsed successfully. Please connect to PostgreSQL.", false);
                 document.getElementById('step2').classList.remove('hidden');
-            } catch (error) { handleFetchError(error, "parsing SQL file"); }
+            } catch (error) {
+                handleFetchError(error, "parsing SQL file");
+            }
         }
-        
+
         async function fetchDatabases() {
-            pgConnectionDetails = { host: document.getElementById('pgHost').value, port: document.getElementById('pgPort').value, user: document.getElementById('pgUser').value, password: document.getElementById('pgPassword').value };
+            pgConnectionDetails = {
+                host: document.getElementById('pgHost').value,
+                port: document.getElementById('pgPort').value,
+                user: document.getElementById('pgUser').value,
+                password: document.getElementById('pgPassword').value
+            };
             showStatus("Connecting to PostgreSQL...", false);
             try {
-                const response = await fetch(`${API_BASE_URL}/api/get_databases`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pgConnectionDetails) });
+                const response = await fetch(`${API_BASE_URL}/api/get_databases`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(pgConnectionDetails)
+                });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Failed to connect.');
                 const selector = document.getElementById('dbSelector');
                 selector.innerHTML = '';
-                data.forEach(dbName => { const option = document.createElement('option'); option.value = dbName; option.textContent = dbName; selector.appendChild(option); });
+                data.forEach(dbName => {
+                    const option = document.createElement('option');
+                    option.value = dbName;
+                    option.textContent = dbName;
+                    selector.appendChild(option);
+                });
                 showStatus("Successfully fetched databases. Please select one.", false);
                 document.getElementById('step2b-db-select').classList.remove('hidden');
-            } catch (error) { handleFetchError(error, "fetching databases"); }
+            } catch (error) {
+                handleFetchError(error, "fetching databases");
+            }
         }
 
         async function fetchTables() {
@@ -222,7 +246,11 @@
             pgConnectionDetails.dbname = selectedDb;
             showStatus(`Fetching tables from "${selectedDb}"...`, false);
             try {
-                const response = await fetch(`${API_BASE_URL}/api/get_tables`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ creds: pgConnectionDetails, dbname: selectedDb }) });
+                const response = await fetch(`${API_BASE_URL}/api/get_tables`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ creds: pgConnectionDetails, dbname: selectedDb })
+                });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Failed to fetch tables.');
                 postgresSchemaData = data;
@@ -230,7 +258,9 @@
                 showStatus("Successfully fetched tables. You may now map the columns.", false);
                 document.getElementById('step3').classList.remove('hidden');
                 document.getElementById('step4').classList.remove('hidden');
-            } catch(error) { handleFetchError(error, "fetching tables"); }
+            } catch(error) {
+                handleFetchError(error, "fetching tables");
+            }
         }
 
         async function runMigration() {
@@ -238,13 +268,11 @@
                 alert("Please define at least one mapping rule before running the migration.");
                 return;
             }
-            
             const selector = document.getElementById('sqlFileSelector');
             const customPathInput = document.getElementById('sqlFilePathInput');
             let filePath = selector.value === 'custom' ? customPathInput.value : selector.value;
-            
-            const migrationConfig = { 
-                pg_config: pgConnectionDetails, 
+            const migrationConfig = {
+                pg_config: pgConnectionDetails,
                 mapping_rules: mappingRules,
                 mysql_dump_file_path: filePath,
                 truncate_tables: document.getElementById('truncateCheckbox').checked,
@@ -253,12 +281,18 @@
             };
             showStatus("Migration started... This may take a while.", false);
             try {
-                const response = await fetch(`${API_BASE_URL}/api/run_migration`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(migrationConfig) });
+                const response = await fetch(`${API_BASE_URL}/api/run_migration`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(migrationConfig)
+                });
                 const result = await response.json();
                 if (!response.ok) throw new Error(result.error || "An unknown server error occurred.");
                 let summaryHtml = `<h3 class="text-lg font-semibold mb-2">${result.message}</h3>`;
                 summaryHtml += '<div class="text-left max-w-3xl mx-auto border rounded-lg bg-white">';
-                if (Object.keys(result.summary).length === 0) { summaryHtml += '<p class="p-4">No data was processed. Check if the source tables exist in the SQL file and are mapped correctly.</p>'; }
+                if (Object.keys(result.summary).length === 0) {
+                    summaryHtml += '<p class="p-4">No data was processed. Check if the source tables exist in the SQL file and are mapped correctly.</p>';
+                }
                 for (const table in result.summary) {
                     const stats = result.summary[table];
                     summaryHtml += `<div class="p-3 border-b last:border-b-0">`;
@@ -286,17 +320,23 @@
                     summaryHtml += `</div>`;
                 }
                 summaryHtml += '</div>';
+
                 const statusArea = document.getElementById('status-area');
                 statusArea.innerHTML = summaryHtml;
                 statusArea.className = 'mb-4 p-4 rounded-md bg-gray-100';
                 statusArea.classList.remove('hidden');
-            } catch (error) { handleFetchError(error, "running migration"); }
+            } catch (error) {
+                handleFetchError(error, "running migration");
+            }
         }
-        
-        function toggleErrorDetails(elementId) { document.getElementById(elementId).classList.toggle('hidden'); }
-        function escapeHtml(unsafe) { 
+
+        function toggleErrorDetails(elementId) {
+            document.getElementById(elementId).classList.toggle('hidden');
+        }
+
+        function escapeHtml(unsafe) {
             if (typeof unsafe !== 'string') return unsafe === null || unsafe === undefined ? '' : unsafe;
-            return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); 
+            return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
 
         // --- UI Rendering & Filters ---
@@ -304,14 +344,22 @@
             const container = document.getElementById('mysqlSchema');
             container.innerHTML = '';
             createTableFilter('mysql-table-filter', mysqlSchemaData, updateSourceTableVisibility);
-            for (const tableName in mysqlSchemaData) { container.appendChild(createSchemaTableElement(tableName, mysqlSchemaData[tableName].columns, 'mysql')); }
+            for (const tableName in mysqlSchemaData) {
+                const tableEl = createSchemaTableElement(tableName, mysqlSchemaData[tableName].columns, 'mysql');
+                tableEl.style.display = 'block'; // Show tables by default
+                container.appendChild(tableEl);
+            }
         }
 
         function displayPostgresSchema() {
             const container = document.getElementById('postgresSchema');
             container.innerHTML = '';
             createTableFilter('pg-table-filter', postgresSchemaData, updateTargetTableVisibility);
-            for (const tableName in postgresSchemaData) { container.appendChild(createSchemaTableElement(tableName, postgresSchemaData[tableName].columns, 'pg')); }
+            for (const tableName in postgresSchemaData) {
+                const tableEl = createSchemaTableElement(tableName, postgresSchemaData[tableName].columns, 'pg');
+                tableEl.style.display = 'block'; // Show tables by default
+                container.appendChild(tableEl);
+            }
         }
 
         function createTableFilter(containerId, tables, changeHandler) {
@@ -342,7 +390,7 @@
                 checkbox.type = 'checkbox';
                 checkbox.className = 'mr-2';
                 checkbox.value = tableName;
-                checkbox.checked = false;
+                checkbox.checked = false; 
                 checkbox.addEventListener('change', changeHandler);
                 label.appendChild(checkbox);
                 label.appendChild(document.createTextNode(tableName));
@@ -356,7 +404,10 @@
                     label.style.display = tableName.includes(searchTerm) ? 'flex' : 'none';
                 });
             });
-            dropdownButton.addEventListener('click', (e) => { e.stopPropagation(); dropdownPanel.classList.toggle('hidden'); });
+            dropdownButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdownPanel.classList.toggle('hidden');
+            });
             document.body.addEventListener('click', () => dropdownPanel.classList.add('hidden'));
             dropdownPanel.addEventListener('click', (e) => e.stopPropagation());
             dropdownContainer.appendChild(dropdownButton);
@@ -390,16 +441,29 @@
             const tableDiv = document.createElement('div');
             tableDiv.id = `${type}-table-${tableName}`;
             tableDiv.className = 'p-4 border rounded-lg';
-            tableDiv.style.display = 'none'; 
-            
+            tableDiv.style.display = 'none';
+
             const headerDiv = document.createElement('div');
             headerDiv.className = 'flex justify-between items-center';
             headerDiv.innerHTML = `<h4 class="font-bold text-lg">${tableName}</h4>`;
+
             if (type === 'mysql') {
+                const btnGroup = document.createElement('div');
+                btnGroup.className = 'flex items-center space-x-2';
+                
+                const viewBtn = document.createElement('button');
+                viewBtn.innerHTML = `<svg class="w-5 h-5 text-gray-500 hover:text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>`;
+                viewBtn.onclick = () => viewSourceTable(tableName);
+                viewBtn.title = "View Full Table Data";
+                btnGroup.appendChild(viewBtn);
+
                 const settingsBtn = document.createElement('button');
                 settingsBtn.innerHTML = `<svg class="w-5 h-5 text-gray-500 hover:text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>`;
                 settingsBtn.onclick = () => openSettingsModal(tableName);
-                headerDiv.appendChild(settingsBtn);
+                settingsBtn.title = "Table Settings (Sort, Filter, Replace)";
+                btnGroup.appendChild(settingsBtn);
+
+                headerDiv.appendChild(btnGroup);
             }
             tableDiv.appendChild(headerDiv);
 
@@ -408,13 +472,11 @@
             columns.forEach(col => {
                 const colItem = document.createElement('div');
                 colItem.className = 'column-item p-2 border rounded-md cursor-pointer';
-                
                 const mainContent = document.createElement('div');
                 mainContent.className = 'flex justify-between items-center';
-
                 const nameAndType = document.createElement('div');
                 nameAndType.className = 'flex items-center';
-                
+
                 if (type === 'pg') {
                     colItem.id = `pg-${tableName}-${col.name}`;
                     const nullableBadge = col.is_nullable === 'NO' ? '<span class="not-null-badge">NOT NULL</span>' : '';
@@ -427,9 +489,9 @@
                 } else {
                     colItem.id = `mysql-${tableName}-${col.name}`;
                     nameAndType.innerHTML = `
-                        <span>${col.name}</span> 
+                        <span>${col.name}</span>
                         <span class="data-type">(${col.type})</span>
-                        <button onclick="event.stopPropagation(); viewColumnData('${tableName}', '${col.name}')" class="ml-2 text-gray-400 hover:text-blue-600" title="Preview Data">
+                        <button onclick="event.stopPropagation(); viewColumnData('${tableName}', '${col.name}')" class="ml-2 text-gray-400 hover:text-blue-600" title="Preview Unique Column Values">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                         </button>
                     `;
@@ -437,7 +499,7 @@
                     colItem.addEventListener('dragstart', handleDragStart);
                     colItem.addEventListener('dblclick', handleSourceColumnDoubleClick);
                 }
-                
+
                 mainContent.appendChild(nameAndType);
                 colItem.appendChild(mainContent);
                 colsList.appendChild(colItem);
@@ -445,14 +507,16 @@
             tableDiv.appendChild(colsList);
             return tableDiv;
         }
-        
+
         // --- Drag & Drop ---
-        function handleDragStart(e) { 
-            e.dataTransfer.setData('text/plain', e.currentTarget.id); 
+        function handleDragStart(e) {
+            e.dataTransfer.setData('text/plain', e.currentTarget.id);
             e.currentTarget.classList.add('dragging');
         }
         document.addEventListener('dragend', () => document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging')));
+
         function handleDragOver(e) { e.preventDefault(); }
+
         function handleDrop(e) {
             e.preventDefault();
             const targetEl = e.target.closest('.column-item[data-col-name]');
@@ -469,7 +533,7 @@
             document.querySelector(`#pg-table-filter input[value="${pgTable}"]`).checked = true;
             updateSourceTableVisibility();
             updateTargetTableVisibility();
-            
+
             setTimeout(updateColumnUIs, 50); // Timeout to allow DOM update
         }
 
@@ -492,6 +556,23 @@
                 }
             }
             updateColumnUIs();
+        }
+
+        // --- UI & State Update Helpers ---
+        function findSourceTablesForTarget(pgTable) {
+            const sourceTables = new Set();
+            const rules = mappingRules[pgTable] || {};
+            for (const col in rules) {
+                const rule = rules[col];
+                if (rule.source_table) {
+                    sourceTables.add(rule.source_table);
+                }
+                if (rule.type === 'transformation' && rule.params && rule.params.columns) {
+                     // Transformations might not have a top-level source_table, but their columns do.
+                     // This part of logic is complex, for now we rely on top-level source_table.
+                }
+            }
+            return Array.from(sourceTables);
         }
 
         function updateColumnUIs() {
@@ -519,16 +600,15 @@
                             const sourceEl = document.getElementById(`mysql-${rule.source_table}-${sourceColName}`);
                             if(sourceEl) sourceEl.classList.add('mapped');
                         });
-                    } else if (rule.type === 'lookup') {
-                        badgeText = `[S-LOOKUP]`;
-                        const sourceEl = document.getElementById(`mysql-${rule.source_table}-${rule.match_col}`);
-                        if(sourceEl) sourceEl.classList.add('mapped');
-                    } else if (rule.type === 'target_lookup') {
-                        badgeText = `[T-LOOKUP]`;
-                        const sourceEl = document.getElementById(`mysql-${rule.source_table}-${rule.match_col}`);
-                        if(sourceEl) sourceEl.classList.add('mapped');
+                    } else if (rule.type === 'lookup' || rule.type === 'target_lookup' || rule.type === 'basic_target_lookup') {
+                        badgeText = rule.type.includes('target') ? `[T-LOOKUP]` : `[S-LOOKUP]`;
+                        const sourceTables = findSourceTablesForTarget(pgTable).length > 0 ? findSourceTablesForTarget(pgTable) : Object.keys(mysqlSchemaData);
+                        sourceTables.forEach(tableName => {
+                            const sourceEl = document.getElementById(`mysql-${tableName}-${rule.match_col}`);
+                            if (sourceEl) sourceEl.classList.add('mapped');
+                        });
                     }
-                    
+
                     const badge = document.createElement('span');
                     badge.className = 'mapping-info-badge';
                     badge.textContent = badgeText;
@@ -539,11 +619,12 @@
             }
             drawMappingLines();
         }
-        
+
         function drawMappingLines() {
             const svg = document.getElementById('mapping-svg');
             svg.innerHTML = svg.querySelector('defs').outerHTML; // Clear previous lines
             const containerRect = document.getElementById('mapping-container').getBoundingClientRect();
+
             for(const pgTable in mappingRules) {
                 for(const pgCol in mappingRules[pgTable]) {
                     const rule = mappingRules[pgTable][pgCol];
@@ -568,8 +649,11 @@
                         drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${rule.value}`));
                     } else if (rule.type === 'transformation') {
                         rule.params.columns.forEach(col => drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${col}`)));
-                    } else if (rule.type === 'lookup' || rule.type === 'target_lookup') {
-                        drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${rule.match_col}`));
+                    } else if (rule.type === 'lookup' || rule.type === 'target_lookup' || rule.type === 'basic_target_lookup') {
+                        const sourceTables = findSourceTablesForTarget(pgTable).length > 0 ? findSourceTablesForTarget(pgTable) : Object.keys(mysqlSchemaData);
+                        sourceTables.forEach(tableName => {
+                            drawLineFromSource(document.getElementById(`mysql-${tableName}-${rule.match_col}`));
+                        });
                     }
                 }
             }
@@ -581,7 +665,6 @@
             const modal = document.getElementById('mapping-panel-modal');
             const content = document.getElementById('mapping-panel-content');
             const currentRule = mappingRules[pgTable]?.[pgCol.name] || {};
-            
             let html = `<h2 class="text-2xl font-bold mb-4">Set Mapping for ${pgTable}.${pgCol.name}</h2>`;
             html += `
                 <div class="mb-4">
@@ -592,29 +675,29 @@
                         <option value="transformation">Transformation (e.g., CONCAT)</option>
                         <option value="lookup">Lookup from another Source Table</option>
                         <option value="target_lookup">Lookup from Target DB Table</option>
+                        <option value="basic_target_lookup">Basic Target Lookup (Direct Query)</option>
                         <option value="static">Static Value</option>
                         <option value="auto-increment">Auto-Increment</option>
                     </select>
                 </div>
                 <div id="mapping-options" class="space-y-4 border-t pt-4"></div>
-
                 <!-- Fallback Options -->
                 <div class="mt-6 border-t pt-4">
-                    <h3 class="font-semibold text-lg mb-2">Fallback for Null Values</h3>
-                    <p class="text-sm text-gray-600 mb-3">If the source value is NULL, use this fallback. This is ignored for Static and Auto-Increment mapping types.</p>
+                    <h3 class="font-semibold text-lg mb-2">Fallback for Empty/Null Values</h3>
+                    <p class="text-sm text-gray-600 mb-3">If the mapping result is empty or NULL, use this fallback. This is ignored for Static and Auto-Increment mapping types.</p>
                     <div class="flex items-center mb-3">
                         <input type="checkbox" id="fallback-enabled-checkbox" class="h-4 w-4">
                         <label for="fallback-enabled-checkbox" class="ml-2">Enable Fallback</label>
                     </div>
                     <div id="fallback-options-container" class="hidden space-y-4">
                         <select id="fallback-type-selector" class="w-full p-2 border rounded-md">
-                            <option value="static">Static Fallback</option>
-                            <option value="auto-increment">Auto-increment Fallback</option>
+                            <option value="static">Static Value</option>
+                            <option value="auto-increment">Auto-Increment</option>
+                            <option value="set_null">Set NULL</option>
                         </select>
                         <div id="fallback-options"></div>
                     </div>
                 </div>
-
                 <div class="flex justify-end space-x-4 mt-6">
                     <button onclick="closeMappingPanelModal()" class="px-4 py-2 bg-gray-200 rounded-md">Cancel</button>
                     <button onclick="saveMappingRule('${pgTable}', '${pgCol.name}')" class="px-4 py-2 bg-blue-600 text-white rounded-md">Save Mapping</button>
@@ -632,26 +715,21 @@
                 document.querySelector('.mt-6.border-t.pt-4').style.display = isFallbackDisabled ? 'none' : 'block';
                 renderMappingOptions(pgTable, pgCol.name);
             };
-            
             fallbackEnabledCheckbox.onchange = () => {
                 fallbackContainer.classList.toggle('hidden', !fallbackEnabledCheckbox.checked);
             };
-
             fallbackTypeSelector.onchange = () => renderFallbackOptions(currentRule.on_null);
-            
+
             if (currentRule.type) {
                 typeSelector.value = currentRule.type;
             }
-            
             if(currentRule.on_null) {
                 fallbackEnabledCheckbox.checked = true;
                 fallbackContainer.classList.remove('hidden');
                 fallbackTypeSelector.value = currentRule.on_null.type;
             }
-
             typeSelector.dispatchEvent(new Event('change'));
             renderFallbackOptions(currentRule.on_null);
-            
             modal.classList.remove('hidden');
         }
 
@@ -666,7 +744,7 @@
 
             if (type === 'direct') {
                 let allSourceCols = '';
-                Object.keys(mysqlSchemaData).forEach(t => {
+                Object.keys(mysqlSchemaData).sort().forEach(t => {
                     mysqlSchemaData[t].columns.forEach(c => {
                         allSourceCols += `<option value="${c.name}" data-table="${t}">${t}.${c.name}</option>`
                     })
@@ -677,22 +755,46 @@
             } else if (type === 'auto-increment') {
                 html = createInput('auto-inc-start', 'Start Number', currentRule.start || 1, 'number');
                 html += createInput('auto-inc-step', 'Step', currentRule.step || 1, 'number');
-            } else if (type === 'lookup' || type === 'target_lookup') {
-                const isTargetLookup = type === 'target_lookup';
+            } else if (type === 'lookup' || type === 'target_lookup' || type === 'basic_target_lookup') {
+                const isTargetLookup = type === 'target_lookup' || type === 'basic_target_lookup';
                 const lookupSchema = isTargetLookup ? postgresSchemaData : mysqlSchemaData;
-                const lookupTableOptions = Object.keys(lookupSchema).map(t => `<option value="${t}">${t}</option>`).join('');
-                html = `
-                    <p class="text-sm font-bold text-gray-700">1. Find a row in another ${isTargetLookup ? 'TARGET' : 'SOURCE'} table...</p>
-                    ${createSelect('lookup-table', `Lookup From ${isTargetLookup ? 'PG' : 'MySQL'} Table`, lookupTableOptions)}
-                    ${createSelect('lookup-where-col', '...where this column...', '')}
-                    <p class="text-sm font-bold text-gray-700 mt-2">2. ...matches a value from the primary source row.</p>
-                    ${createSelect('lookup-match-col', '...using this column from the primary source table.', '')}
-                    <p class="text-sm font-bold text-gray-700 mt-2">3. Then get the result.</p>
-                    ${createSelect('lookup-get-col', 'Get value from this column in the found row', '')}
-                    ${createInput('lookup-default-val', 'Default value if not found (optional)', currentRule.default || '')}
-                `;
+                const lookupTableOptions = Object.keys(lookupSchema).sort().map(t => `<option value="${t}">${t}</option>`).join('');
+                const lookupLabel = isTargetLookup ? 'Target (PostgreSQL)' : 'Source (MySQL)';
+
+                let matchColOptions = '';
+                const sourceTablesInvolved = findSourceTablesForTarget(pgTable).length > 0 ? findSourceTablesForTarget(pgTable) : Object.keys(mysqlSchemaData);
+                const uniqueColNames = new Set();
+                sourceTablesInvolved.forEach(tableName => {
+                    mysqlSchemaData[tableName]?.columns.forEach(col => uniqueColNames.add(col.name));
+                });
+                Array.from(uniqueColNames).sort().forEach(colName => {
+                    matchColOptions += `<option value="${colName}">${colName}</option>`;
+                });
+
+                if (type === 'basic_target_lookup') {
+                     html = `
+                        <p class="text-sm font-bold text-gray-700">This performs a direct query on the target DB for each row. Use with caution.</p>
+                        ${createSelect('lookup-table', 'Lookup From PG Table', lookupTableOptions)}
+                        ${createSelect('lookup-get-col', 'Get this column', '')}
+                        ${createSelect('lookup-match-col', 'Match using this column from the source row.', matchColOptions)}
+                        ${createInput('where-clause-input', 'WHERE Clause (use {value} for placeholder)', currentRule.where_clause || '')}
+                        ${createInput('order-by-clause-input', 'ORDER BY Clause (optional)', currentRule.order_by_clause || '')}
+                        ${createInput('lookup-default-val', 'Default value if not found (optional)', currentRule.default || '')}
+                    `;
+                } else {
+                     html = `
+                        <p class="text-sm font-bold text-gray-700">1. Find a row in another ${lookupLabel} table...</p>
+                        ${createSelect('lookup-table', `Lookup From ${lookupLabel} Table`, lookupTableOptions)}
+                        ${createSelect('lookup-where-col', '...where this column...', '')}
+                        <p class="text-sm font-bold text-gray-700 mt-2">2. ...matches a value from the current source row.</p>
+                        ${createSelect('lookup-match-col', '...using this column from the source row.', matchColOptions)}
+                        <p class="text-sm font-bold text-gray-700 mt-2">3. Then get the result.</p>
+                        ${createSelect('lookup-get-col', 'Get value from this column in the found row', '')}
+                        ${createInput('lookup-default-val', 'Default value if not found (optional)', currentRule.default || '')}
+                    `;
+                }
             } else if (type === 'transformation') {
-                const tableOptions = Object.keys(mysqlSchemaData).map(t => `<option value="${t}">${t}</option>`).join('');
+                const tableOptions = Object.keys(mysqlSchemaData).sort().map(t => `<option value="${t}">${t}</option>`).join('');
                 html = createSelect('transform-source-table', 'Source Table for Transformation', tableOptions);
                 html += createSelect('transform-function', 'Function', '<option value="CONCAT">CONCAT</option>');
                 html += `<div id="transform-params" class="p-2 border rounded-md bg-gray-50 space-y-2 mt-2"></div>`;
@@ -704,32 +806,28 @@
                 const colSelect = document.getElementById('direct-source-col');
                 const optionToSelect = colSelect.querySelector(`option[value="${currentRule.value}"][data-table="${currentRule.source_table}"]`);
                 if(optionToSelect) optionToSelect.selected = true;
-            } else if (type === 'lookup' || type === 'target_lookup') {
-                const isTargetLookup = type === 'target_lookup';
+            } else if (type === 'lookup' || type === 'target_lookup' || type === 'basic_target_lookup') {
+                const isTargetLookup = type === 'target_lookup' || type === 'basic_target_lookup';
                 const lookupSchema = isTargetLookup ? postgresSchemaData : mysqlSchemaData;
                 const lookupTableSelect = document.getElementById('lookup-table');
-                const whereColSelect = document.getElementById('lookup-where-col');
                 const getColSelect = document.getElementById('lookup-get-col');
+                const whereColSelect = document.getElementById('lookup-where-col');
                 const matchColSelect = document.getElementById('lookup-match-col');
 
                 const updateLookupCols = () => {
                     const selectedTable = lookupTableSelect.value;
                     const cols = lookupSchema[selectedTable]?.columns || [];
                     const options = cols.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-                    whereColSelect.innerHTML = options;
-                    getColSelect.innerHTML = options;
+                    if(getColSelect) getColSelect.innerHTML = options;
+                    if(whereColSelect) whereColSelect.innerHTML = options;
                 };
 
-                const primarySourceTable = findPrimarySourceTable(pgTable);
-                const primaryCols = mysqlSchemaData[primarySourceTable]?.columns || [];
-                matchColSelect.innerHTML = primaryCols.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-                
                 lookupTableSelect.onchange = updateLookupCols;
-                
                 if(currentRule.lookup_table || currentRule.lookup_source_table) lookupTableSelect.value = currentRule.lookup_table || currentRule.lookup_source_table;
                 updateLookupCols();
-                if(currentRule.where_col) whereColSelect.value = currentRule.where_col;
+                
                 if(currentRule.get_col) getColSelect.value = currentRule.get_col;
+                if(currentRule.where_col) whereColSelect.value = currentRule.where_col;
                 if(currentRule.match_col) matchColSelect.value = currentRule.match_col;
             } else if (type === 'transformation') {
                 const tableSelect = document.getElementById('transform-source-table');
@@ -749,7 +847,9 @@
                         `;
                         if(currentRule.params?.columns) {
                             const selects = paramsContainer.querySelectorAll('.concat-col-select');
-                            selects.forEach((sel, i) => { if (currentRule.params.columns[i]) sel.value = currentRule.params.columns[i]; });
+                            selects.forEach((sel, i) => {
+                                if (currentRule.params.columns[i]) sel.value = currentRule.params.columns[i];
+                            });
                         }
                     }
                 };
@@ -769,19 +869,6 @@
             container.appendChild(newSelect);
         }
 
-        function findPrimarySourceTable(pgTable) {
-            const counts = {};
-            const rules = mappingRules[pgTable] || {};
-            for(const col in rules) {
-                const rule = rules[col];
-                if (rule.source_table) {
-                    counts[rule.source_table] = (counts[rule.source_table] || 0) + 1;
-                }
-            }
-            if(Object.keys(counts).length === 0) return Object.keys(mysqlSchemaData)[0];
-            return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
-        }
-
         function renderFallbackOptions(currentFallbackRule = {}) {
             const container = document.getElementById('fallback-options');
             const type = document.getElementById('fallback-type-selector').value;
@@ -793,24 +880,55 @@
             } else if (type === 'auto-increment') {
                 html = createInput('fallback-auto-inc-start', 'Start Number', currentFallbackRule.start || 1, 'number');
                 html += createInput('fallback-auto-inc-step', 'Step', currentFallbackRule.step || 1, 'number');
+            } else if (type === 'set_null') {
+                html = `<p class="text-sm text-gray-500 p-2">The final value will be set to NULL if the mapping returns an empty result.</p>`;
             }
             container.innerHTML = html;
+        }
+
+        // Helper function to convert role string values to integers
+        function convertRoleToInt(roleString) {
+            // Map role strings to integer values
+            const roleMap = {
+                'admin': 1,
+                'teacher': 2,
+                'student': 3
+                // Add more mappings as needed
+            };
+            return roleMap[roleString.toLowerCase()] || roleString;
         }
 
         function saveMappingRule(pgTable, pgCol) {
             if (!mappingRules[pgTable]) mappingRules[pgTable] = {};
             const type = document.getElementById('mapping-type-selector').value;
-            
             if (type === 'none') {
                 delete mappingRules[pgTable][pgCol];
+                if (Object.keys(mappingRules[pgTable]).length === 0) {
+                    delete mappingRules[pgTable];
+                }
             } else {
                 let newRule = { type };
+                
+                // Special handling for role_id columns that need to be integers
+                const isRoleIdColumn = pgCol.toLowerCase() === 'role_id';
+                
                 if (type === 'direct') {
                     const selectedOption = document.getElementById('direct-source-col').selectedOptions[0];
                     newRule.value = selectedOption.value;
                     newRule.source_table = selectedOption.dataset.table;
+                    
+                    // If this is a role_id column, add a transformation to convert to integer
+                    if (isRoleIdColumn) {
+                        newRule.transform = 'convertRoleToInt';
+                    }
                 } else if (type === 'static') {
-                    newRule.value = document.getElementById('static-value').value;
+                    // If this is a role_id column and the value is a string, try to convert to integer
+                    if (isRoleIdColumn) {
+                        const staticValue = document.getElementById('static-value').value;
+                        newRule.value = convertRoleToInt(staticValue);
+                    } else {
+                        newRule.value = document.getElementById('static-value').value;
+                    }
                 } else if (type === 'auto-increment') {
                     newRule.start = parseInt(document.getElementById('auto-inc-start').value);
                     newRule.step = parseInt(document.getElementById('auto-inc-step').value);
@@ -827,51 +945,77 @@
                     newRule.get_col = document.getElementById('lookup-get-col').value;
                     newRule.match_col = document.getElementById('lookup-match-col').value;
                     newRule.default = document.getElementById('lookup-default-val').value;
-                    newRule.source_table = findPrimarySourceTable(pgTable);
+                    
+                    // If this is a role_id column, make sure the default value is numeric
+                    if (isRoleIdColumn && newRule.default) {
+                        newRule.default = convertRoleToInt(newRule.default);
+                    }
                 } else if (type === 'target_lookup') {
                     newRule.lookup_table = document.getElementById('lookup-table').value;
                     newRule.where_col = document.getElementById('lookup-where-col').value;
                     newRule.get_col = document.getElementById('lookup-get-col').value;
                     newRule.match_col = document.getElementById('lookup-match-col').value;
                     newRule.default = document.getElementById('lookup-default-val').value;
-                    newRule.source_table = findPrimarySourceTable(pgTable);
+                    
+                    // If this is a role_id column, make sure the default value is numeric
+                    if (isRoleIdColumn && newRule.default) {
+                        newRule.default = convertRoleToInt(newRule.default);
+                    }
+                } else if (type === 'basic_target_lookup') {
+                    newRule.lookup_table = document.getElementById('lookup-table').value;
+                    newRule.get_col = document.getElementById('lookup-get-col').value;
+                    newRule.match_col = document.getElementById('lookup-match-col').value;
+                    newRule.where_clause = document.getElementById('where-clause-input').value;
+                    newRule.order_by_clause = document.getElementById('order-by-clause-input').value;
+                    newRule.default = document.getElementById('lookup-default-val').value;
+                    
+                    // If this is a role_id column, make sure the default value is numeric
+                    if (isRoleIdColumn && newRule.default) {
+                        newRule.default = convertRoleToInt(newRule.default);
+                    }
                 }
-                
+
                 if (document.getElementById('fallback-enabled-checkbox').checked && !['static', 'auto-increment'].includes(type)) {
                     const fallbackType = document.getElementById('fallback-type-selector').value;
                     let fallbackRule = { type: fallbackType };
                     if (fallbackType === 'static') {
-                        fallbackRule.value = document.getElementById('fallback-static-value').value;
+                        let fallbackValue = document.getElementById('fallback-static-value').value;
+                        // If this is a role_id column, convert the fallback value too
+                        if (isRoleIdColumn) {
+                            fallbackValue = convertRoleToInt(fallbackValue);
+                        }
+                        fallbackRule.value = fallbackValue;
                     } else if (fallbackType === 'auto-increment') {
                         fallbackRule.start = parseInt(document.getElementById('fallback-auto-inc-start').value);
                         fallbackRule.step = parseInt(document.getElementById('fallback-auto-inc-step').value);
                     }
                     newRule.on_null = fallbackRule;
                 }
-
                 mappingRules[pgTable][pgCol] = newRule;
             }
-            
             updateColumnUIs();
             closeMappingPanelModal();
         }
-        
+
         function openSettingsModal(tableName) {
             const modal = document.getElementById('settings-modal');
             const content = document.getElementById('settings-modal-content');
             const tableFilters = migrationFilters[tableName] || {};
             const tableSort = tableFilters.sort || {};
-
             let colOptions = '<option value="">-- No Sorting --</option>';
             mysqlSchemaData[tableName].columns.forEach(col => {
                 colOptions += `<option value="${col.name}" ${tableSort.column === col.name ? 'selected' : ''}>${col.name}</option>`;
             });
 
             let html = `<h2 class="text-2xl font-bold mb-4">Settings for ${tableName}</h2>`;
-            
+            html += `<div class="mb-4 border-b pb-4">
+                        <h3 class="font-semibold mb-2">Data Merging (for multi-table sources)</h3>
+                        <p class="text-sm text-gray-600 mb-2">If mapping from multiple source tables to one target, specify the column used to link rows from this table to others (e.g., 'id', 'user_id').</p>
+                        <input type="text" id="merge-key-input" class="w-full p-2 border rounded-md" placeholder="e.g., id" value="${escapeHtml(tableFilters.merge_key || 'id')}">
+                     </div>`;
             html += `<div class="mb-4 border-b pb-4">
                         <h3 class="font-semibold mb-2">Sort Source Data</h3>
-                        <p class="text-sm text-gray-600 mb-2">Sort the data from this table before processing. This applies only if it's the primary source table for a mapping.</p>
+                        <p class="text-sm text-gray-600 mb-2">Sort data before processing. Note: This is only applied when this is the only source table for a mapping.</p>
                         <div class="flex space-x-2">
                             <select id="sort-column-select" class="w-2/3 p-2 border rounded-md">${colOptions}</select>
                             <select id="sort-order-select" class="w-1/3 p-2 border rounded-md">
@@ -880,10 +1024,8 @@
                             </select>
                         </div>
                     </div>`;
-
             html += `<div class="mb-6"><label class="block font-semibold mb-1">WHERE Clause (Filter Rows)</label>`;
             html += `<input type="text" id="where-clause-input" class="w-full p-2 border rounded-md" placeholder="e.g., role = 'teacher' AND status != 'inactive'" value="${escapeHtml(tableFilters.where || '')}"></div>`;
-            
             html += `<div class="mb-4"><h3 class="font-semibold mb-2">Value Replacements</h3><div class="space-y-3">`;
             mysqlSchemaData[tableName].columns.forEach(col => {
                 html += `<div class="p-2 border-t"><p class="font-medium">${col.name}</p><div id="replacements-for-${col.name}" class="space-y-2 mt-2"></div>`;
@@ -919,19 +1061,18 @@
             if (!migrationFilters[tableName]) {
                 migrationFilters[tableName] = {};
             }
+            migrationFilters[tableName].merge_key = document.getElementById('merge-key-input').value || 'id';
 
             const sortColumn = document.getElementById('sort-column-select').value;
             if (sortColumn) {
-                migrationFilters[tableName].sort = { 
-                    column: sortColumn, 
-                    order: document.getElementById('sort-order-select').value 
+                migrationFilters[tableName].sort = {
+                    column: sortColumn,
+                    order: document.getElementById('sort-order-select').value
                 };
             } else {
                 delete migrationFilters[tableName].sort;
             }
-
             migrationFilters[tableName].where = document.getElementById('where-clause-input').value;
-
             const replacements = {};
             mysqlSchemaData[tableName].columns.forEach(col => {
                 const container = document.getElementById(`replacements-for-${col.name}`);
@@ -939,21 +1080,24 @@
                 container.querySelectorAll('.flex').forEach(ruleDiv => {
                     const find = ruleDiv.querySelector('.find-input').value;
                     const replace = ruleDiv.querySelector('.replace-input').value;
-                    if (find) { rules.push({ find, replace }); }
+                    if (find) {
+                        rules.push({ find, replace });
+                    }
                 });
-                if (rules.length > 0) { replacements[col.name] = rules; }
+                if (rules.length > 0) {
+                    replacements[col.name] = rules;
+                }
             });
             migrationFilters[tableName].replacements = replacements;
-
             closeSettingsModal();
         }
-        
+
         async function viewColumnData(tableName, columnName) {
             const modal = document.getElementById('data-preview-modal');
             const content = document.getElementById('data-preview-content');
             modal.classList.remove('hidden');
             content.innerHTML = `<h2 class="text-2xl font-bold mb-4">Previewing ${tableName}.${columnName}</h2><p>Loading data...</p>`;
-
+            
             const selector = document.getElementById('sqlFileSelector');
             const customPathInput = document.getElementById('sqlFilePathInput');
             let payload = {};
@@ -968,7 +1112,11 @@
             }
 
             try {
-                const response = await fetch(`${API_BASE_URL}/api/get_column_data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const response = await fetch(`${API_BASE_URL}/api/get_column_data`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Failed to fetch column data.');
                 
@@ -982,7 +1130,7 @@
                     });
                 }
                 listHtml += '</ul>';
-
+                
                 content.innerHTML = `
                     <div class="flex justify-between items-start">
                         <h2 class="text-2xl font-bold mb-4">Previewing ${tableName}.${columnName}</h2>
@@ -995,10 +1143,69 @@
             }
         }
 
-        function closeSettingsModal() { document.getElementById('settings-modal').classList.add('hidden'); }
-        function closeMappingPanelModal() { document.getElementById('mapping-panel-modal').classList.add('hidden'); }
-        function closeDataPreviewModal() { document.getElementById('data-preview-modal').classList.add('hidden'); }
+        async function viewSourceTable(tableName) {
+            const modal = document.getElementById('data-preview-modal');
+            const content = document.getElementById('data-preview-content');
+            modal.classList.remove('hidden');
+            content.innerHTML = `<h2 class="text-2xl font-bold mb-4">Viewing Full Data for ${tableName}</h2><p>Loading data...</p>`;
 
+            const selector = document.getElementById('sqlFileSelector');
+            const customPathInput = document.getElementById('sqlFilePathInput');
+            let payload = {};
+            if (selector.value === 'custom') {
+                payload = { path: customPathInput.value, tableName };
+            } else if (selector.value) {
+                payload = { filename: selector.value, tableName };
+            } else {
+                alert("Please select a SQL file first.");
+                closeDataPreviewModal();
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/get_source_table_data`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Failed to fetch table data.');
+
+                let tableHtml = `<div class="data-preview-list"><table class="data-preview-table"><thead><tr>`;
+                data.headers.forEach(header => {
+                    tableHtml += `<th>${escapeHtml(header)}</th>`;
+                });
+                tableHtml += `</tr></thead><tbody>`;
+                data.rows.forEach(row => {
+                    tableHtml += `<tr>`;
+                    data.headers.forEach(header => {
+                        tableHtml += `<td>${escapeHtml(row[header])}</td>`;
+                    });
+                    tableHtml += `</tr>`;
+                });
+                tableHtml += `</tbody></table></div>`;
+
+                content.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <h2 class="text-2xl font-bold mb-4">Full Data for ${tableName}</h2>
+                        <button onclick="closeDataPreviewModal()" class="text-2xl font-bold">&times;</button>
+                    </div>
+                    ${tableHtml}
+                `;
+            } catch (error) {
+                 content.innerHTML = `<p class="text-red-500">Error: ${error.message}</p> <button onclick="closeDataPreviewModal()" class="mt-4 px-4 py-2 bg-gray-200 rounded-md">Close</button>`;
+            }
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settings-modal').classList.add('hidden');
+        }
+        function closeMappingPanelModal() {
+            document.getElementById('mapping-panel-modal').classList.add('hidden');
+        }
+        function closeDataPreviewModal() {
+            document.getElementById('data-preview-modal').classList.add('hidden');
+        }
     </script>
 </body>
 </html>

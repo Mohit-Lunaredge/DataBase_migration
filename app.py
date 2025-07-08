@@ -138,7 +138,7 @@ def run_migration():
 @app.route('/api/get_column_data', methods=['POST'])
 def get_column_data():
     """
-    Parses a specific table from a MySQL dump file to extract all unique values 
+    Parses a specific table from a MySQL dump file to extract all unique values
     from a given column. This is used for data preview in the UI.
     """
     data = request.json
@@ -151,7 +151,6 @@ def get_column_data():
         return jsonify({"error": "File path, table name, and column name are required."}), 400
 
     filepath = custom_path if custom_path else os.path.join(SQL_FILES_DIR, filename)
-
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             full_content = f.read()
@@ -162,6 +161,7 @@ def get_column_data():
 
     unique_values = set()
     total_rows = 0
+    
     insert_statement_regex = re.compile(
         r"INSERT INTO\s+[`\"]?{}[`\"]?.*?;".format(re.escape(table_name_to_find)),
         re.IGNORECASE | re.DOTALL
@@ -184,6 +184,43 @@ def get_column_data():
         "unique_values": sorted(list(v for v in unique_values if v is not None)),
         "total_rows": total_rows
     })
+
+@app.route('/api/get_source_table_data', methods=['POST'])
+def get_source_table_data():
+    """Parses a MySQL dump to extract all data for a specific table."""
+    data = request.json
+    filename = data.get('filename')
+    custom_path = data.get('path')
+    table_name_to_find = data.get('tableName')
+
+    if not (filename or custom_path) or not table_name_to_find:
+        return jsonify({"error": "File path and table name are required."}), 400
+
+    filepath = custom_path if custom_path else os.path.join(SQL_FILES_DIR, filename)
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            full_content = f.read()
+    except FileNotFoundError:
+        return jsonify({"error": f"File not found on server at path: {filepath}"}), 404
+    except Exception as e:
+        return jsonify({"error": f"An error occurred while reading the file: {str(e)}"}), 500
+
+    table_data = []
+    headers = []
+    insert_statement_regex = re.compile(
+        r"INSERT INTO\s+[`\"]?{}[`\"]?.*?;".format(re.escape(table_name_to_find)),
+        re.IGNORECASE | re.DOTALL
+    )
+    for statement_match in insert_statement_regex.finditer(full_content):
+        _, mysql_cols, all_rows = _parse_mysql_insert(statement_match.group(0))
+        if not headers and mysql_cols:
+            headers = mysql_cols
+        if mysql_cols and all_rows:
+            for row in all_rows:
+                table_data.append(dict(zip(mysql_cols, row)))
+
+    return jsonify({"headers": headers, "rows": table_data})
+
 
 # --- Core Migration Logic ---
 
@@ -240,8 +277,7 @@ def _check_where_condition(row_dict, where_clause):
 
 def _apply_replacements(value, rules):
     """Applies find-and-replace rules to a single value."""
-    if value is None:
-        return None
+    if value is None: return None
     val_str = str(value)
     for rule in rules:
         if val_str == rule.get('find'):
@@ -258,55 +294,94 @@ def _sort_key_helper(item, column):
     except (ValueError, TypeError):
         return (2, str(value))
 
-def _apply_transformation(row_dict, rule):
-    """Applies a data transformation function (e.g., CONCAT) to a row."""
+# --- Helper Functions ---
+
+def _convert_role_to_int(value):
+    """
+    Converts a role string value to its corresponding integer.
+    Useful for handling role_id fields that expect integers but receive strings.
+    """
+    if not value or not isinstance(value, str):
+        return value
+        
+    role_map = {
+        'admin': 1,
+        'teacher': 2,
+        'student': 3,
+        # Add more mappings as needed
+    }
+    
+    lower_value = value.lower()
+    if lower_value in role_map:
+        return role_map[lower_value]
+    
+    # Try to convert to integer if possible
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return value
+
+def _apply_transformation(source_row, rule):
+    """
+    Applies transformations to source data according to mapping rules.
+    Currently supports CONCAT and special function convertRoleToInt.
+    """
+    if rule.get('transform') == 'convertRoleToInt':
+        source_value = source_row.get(rule['value'])
+        return _convert_role_to_int(source_value)
+        
     if rule['function'] == 'CONCAT':
-        params = rule.get('params', {})
-        columns_to_concat = params.get('columns', [])
-        separator = params.get('separator', '')
-        values_to_concat = [str(row_dict.get(c, '')) for c in columns_to_concat]
-        return separator.join(values_to_concat)
+        parts = []
+        columns = rule['params'].get('columns', [])
+        for col in columns:
+            val = source_row.get(col, '')
+            if val is not None:
+                parts.append(str(val))
+            else:
+                parts.append('')
+        separator = rule['params'].get('separator', ' ')
+        return separator.join(parts)
     return None
 
 def _apply_fallback_rules(value, rule, counters, pg_table, pg_col):
-    """Applies fallback rules if the primary value is None."""
+    """Applies fallback rules if the primary value is None or an empty string."""
     if value is not None and value != '':
         return value
 
     fallback_rule = rule.get('on_null')
     if not fallback_rule:
         return None
-
+        
+    if fallback_rule['type'] == 'set_null':
+        return None
     if fallback_rule['type'] == 'static':
         return fallback_rule.get('value')
-    
     if fallback_rule['type'] == 'auto-increment':
         counter_key = f"{pg_table}.{pg_col}.fallback"
         if counter_key not in counters:
             counters[counter_key] = fallback_rule.get('start', 1)
-        
         current_val = counters[counter_key]
         counters[counter_key] += fallback_rule.get('step', 1)
         return current_val
-
+        
     return None
 
 def _perform_migration(config):
     """
-    Performs data migration by iterating through target tables, determining a primary
-    source table, and applying all defined mapping rules including direct, lookup,
-    and transformation to build and insert records.
+    Performs data migration by iterating through target tables, determining a
+    primary source table, and applying all defined mapping rules including
+    direct, lookup, and transformation to build and insert records.
     """
     pg_conn = psycopg2.connect(**config['pg_config'])
     pg_cursor = pg_conn.cursor()
     migration_summary = defaultdict(lambda: defaultdict(int, {'errors': []}))
     mapping_rules = config.get('mapping_rules', {})
     filters = config.get('filters', {})
-    
+
     # Load all data from the MySQL dump into an in-memory dictionary.
     with open(config['mysql_dump_file_path'], 'r', encoding='utf-8') as f:
         full_content = f.read()
-    
+
     all_data = defaultdict(list)
     insert_statement_regex = re.compile(r"INSERT INTO .*?;\n", re.IGNORECASE | re.DOTALL)
     for statement_match in insert_statement_regex.finditer(full_content):
@@ -316,43 +391,84 @@ def _perform_migration(config):
                 if len(mysql_cols) == len(row):
                     all_data[mysql_table].append(dict(zip(mysql_cols, row)))
 
+    # Pre-process all source data by applying all defined replacement rules.
+    # This ensures that all subsequent steps (merging, mapping) use the corrected values.
+    print("Pre-processing source data with replacement rules...")
+    for source_table, table_filters in filters.items():
+        if 'replacements' in table_filters and source_table in all_data:
+            replacement_map = table_filters['replacements']
+            if not replacement_map: continue
+
+            processed_rows = []
+            for row in all_data[source_table]:
+                new_row = row.copy()
+                for col_to_replace, rules in replacement_map.items():
+                    if col_to_replace in new_row:
+                        new_row[col_to_replace] = _apply_replacements(new_row[col_to_replace], rules)
+                processed_rows.append(new_row)
+            
+            all_data[source_table] = processed_rows
+            print(f" -> Applied replacement rules to table: {source_table}")
+
     # Truncate target tables if requested.
     if config.get('truncate_tables'):
         all_mapped_pg_tables = {pg_table for pg_table in mapping_rules.keys()}
         for pg_table in sorted(list(all_mapped_pg_tables), reverse=True):
             print(f"Truncating table: {pg_table}")
             pg_cursor.execute(f'TRUNCATE TABLE "{pg_table}" RESTART IDENTITY CASCADE;')
-        pg_conn.commit()
+            pg_conn.commit()
         print("Target tables truncated.")
 
     counters = {}
-
-    # Main Logic: Iterate through each TARGET table defined in the mapping rules.
-    # The order of processing tables is now determined by their dependencies.
-    # A simple topological sort could be implemented here for more complex scenarios.
-    # For now, we assume the user maps tables in a logical order (e.g., 'users' before 'posts').
-    
-    # A cache for target DB lookups to avoid N+1 queries.
     cached_target_lookups = {}
 
     for pg_table in mapping_rules.keys():
         rules = mapping_rules[pg_table]
         print(f"\nProcessing target table: {pg_table}")
 
-        # Determine the primary source table for this target.
-        source_table_counts = defaultdict(int)
+        # Determine all unique source tables for this target table
+        source_tables_involved = set()
         for _, rule in rules.items():
             if rule.get('source_table'):
-                source_table_counts[rule['source_table']] += 1
-        
-        if not source_table_counts:
+                source_tables_involved.add(rule['source_table'])
+
+        if not source_tables_involved:
             print(f" -> No source tables found for {pg_table}. Skipping.")
             continue
-            
-        primary_source_table = max(source_table_counts, key=source_table_counts.get)
-        print(f" -> Primary source table identified as: {primary_source_table}")
+        
+        print(f" -> Source tables involved: {', '.join(source_tables_involved)}")
 
-        # Pre-build indexes for all SOURCE lookup tables for this target.
+        # --- Data Merging & Filtering Logic ---
+        iteration_data = []
+        if len(source_tables_involved) > 1:
+            print(" -> Multiple source tables found. Merging data...")
+            merged_source_data = defaultdict(dict)
+            for source_table in source_tables_involved:
+                merge_key_col = filters.get(source_table, {}).get('merge_key', 'id')
+                print(f"  - Processing {source_table} using merge key '{merge_key_col}'")
+                for row in all_data.get(source_table, []):
+                    merge_key = row.get(merge_key_col)
+                    if merge_key is not None:
+                        merged_source_data[str(merge_key)].update(row)
+            iteration_data = list(merged_source_data.values())
+            print(f" -> Merged into {len(iteration_data)} unique records.")
+        else:
+            primary_source_table = list(source_tables_involved)[0]
+            print(f" -> Single source table identified: {primary_source_table}")
+            iteration_data = all_data[primary_source_table]
+            
+            table_filters = filters.get(primary_source_table, {})
+            # Note: Replacements are already applied in the pre-processing step.
+            if 'where' in table_filters and table_filters['where']:
+                filtered_rows = [row for row in iteration_data if _check_where_condition(row, table_filters['where'])]
+                migration_summary[pg_table]['filtered_out'] += len(iteration_data) - len(filtered_rows)
+                iteration_data = filtered_rows
+            
+            if 'sort' in table_filters and table_filters['sort'].get('column'):
+                sort_settings = table_filters['sort']
+                iteration_data.sort(key=lambda item: _sort_key_helper(item, sort_settings['column']), reverse=(sort_settings.get('order', 'ASC').upper() == 'DESC'))
+
+        # --- Indexing for Lookups ---
         indexed_source_lookups = {}
         for _, rule in rules.items():
             if rule['type'] == 'lookup':
@@ -360,56 +476,46 @@ def _perform_migration(config):
                 where_col = rule['where_col']
                 index_key = f"source_{lookup_source_table}_{where_col}"
                 if index_key not in indexed_source_lookups:
-                    print(f"   -> Indexing SOURCE table {lookup_source_table} on column {where_col} for lookups.")
+                    print(f" -> Indexing SOURCE table {lookup_source_table} on column {where_col} for lookups.")
                     indexed_source_lookups[index_key] = {
-                        str(row.get(where_col)): row 
-                        for row in all_data.get(lookup_source_table, []) if where_col in row and row.get(where_col) is not None
+                        str(row.get(where_col)): row
+                        for row in all_data.get(lookup_source_table, [])
+                        if where_col in row and row.get(where_col) is not None
                     }
         
-        # Pre-cache any TARGET lookup tables needed for this target.
+        # --- Caching for Target Lookups ---
         for _, rule in rules.items():
             if rule['type'] == 'target_lookup':
                 lookup_table = rule['lookup_table']
                 if lookup_table not in cached_target_lookups:
-                    print(f"   -> Caching TARGET table {lookup_table} for lookups.")
+                    print(f" -> Caching TARGET table {lookup_table} for lookups.")
                     try:
                         pg_cursor.execute(f'SELECT * FROM "{lookup_table}"')
                         lookup_data = [dict(zip([desc[0] for desc in pg_cursor.description], row)) for row in pg_cursor.fetchall()]
                         cached_target_lookups[lookup_table] = {
-                            str(row.get(rule['where_col'])): row for row in lookup_data if rule['where_col'] in row
+                            str(row.get(rule['where_col'])): row
+                            for row in lookup_data if rule['where_col'] in row
                         }
-                        print(f"     - Cached {len(cached_target_lookups[lookup_table])} rows.")
+                        print(f" - Cached {len(cached_target_lookups[lookup_table])} rows.")
                     except Exception as e:
-                        print(f"     - ERROR: Could not cache target table {lookup_table}. Error: {e}")
+                        print(f" - ERROR: Could not cache target table {lookup_table}. Error: {e}")
                         migration_summary[pg_table]['errors'].append({"error": f"Failed to cache target lookup table {lookup_table}: {e}"})
 
-
-        # Get and apply filters for the primary source table
-        table_filters = filters.get(primary_source_table, {})
-        primary_data_rows = all_data[primary_source_table]
-
-        # Apply value replacements, filtering, and sorting
-        if 'replacements' in table_filters:
-            primary_data_rows = [{col: _apply_replacements(val, table_filters['replacements'].get(col, [])) for col, val in row.items()} for row in primary_data_rows]
-        if 'where' in table_filters and table_filters['where']:
-            filtered_rows = [row for row in primary_data_rows if _check_where_condition(row, table_filters['where'])]
-            migration_summary[pg_table]['filtered_out'] += len(primary_data_rows) - len(filtered_rows)
-            primary_data_rows = filtered_rows
-        if 'sort' in table_filters and table_filters['sort'].get('column'):
-            sort_settings = table_filters['sort']
-            primary_data_rows.sort(key=lambda item: _sort_key_helper(item, sort_settings['column']), reverse=(sort_settings.get('order', 'ASC').upper() == 'DESC'))
-
-        # Process each row from the (now filtered and sorted) primary source table.
-        for source_row in primary_data_rows:
+        # --- Row-by-Row Processing ---
+        for source_row in iteration_data:
             pg_values_dict = {}
-
-            # Build the consolidated row for insertion into the target PG table.
             for pg_col, rule in rules.items():
                 value_found = None
                 try:
-                    if rule['type'] == 'direct' and rule.get('source_table') == primary_source_table:
+                    if rule['type'] == 'direct':
                         value_found = source_row.get(rule['value'])
-                    elif rule['type'] == 'transformation' and rule.get('source_table') == primary_source_table:
+                        # Check if this is a role_id field that needs conversion
+                        if pg_col.lower() == 'role_id' and value_found and isinstance(value_found, str):
+                            value_found = _convert_role_to_int(value_found)
+                        # Apply transformation if specified
+                        if rule.get('transform') == 'convertRoleToInt':
+                            value_found = _convert_role_to_int(value_found)
+                    elif rule['type'] == 'transformation':
                         value_found = _apply_transformation(source_row, rule)
                     elif rule['type'] == 'lookup':
                         match_value = str(source_row.get(rule['match_col']))
@@ -421,22 +527,38 @@ def _perform_migration(config):
                         lookup_cache = cached_target_lookups.get(rule['lookup_table'], {})
                         target_row = lookup_cache.get(match_value)
                         value_found = target_row.get(rule['get_col']) if target_row else rule.get('default', None)
+                    elif rule['type'] == 'basic_target_lookup':
+                        query = f'SELECT "{rule["get_col"]}" FROM "{rule["lookup_table"]}"'
+                        params = []
+                        if rule.get('where_clause'):
+                            where_clause = rule['where_clause'].replace('{value}', '%s')
+                            query += f" WHERE {where_clause}"
+                            params.append(source_row.get(rule['match_col']))
+                        if rule.get('order_by_clause'):
+                            if re.match(r'^[a-zA-Z0-9_,\s]+$', rule['order_by_clause']):
+                                query += f" ORDER BY {rule['order_by_clause']}"
+                        query += " LIMIT 1"
+                        pg_cursor.execute(query, tuple(params))
+                        result = pg_cursor.fetchone()
+                        value_found = result[0] if result else rule.get('default', None)
                     elif rule['type'] == 'static':
                         value_found = rule['value']
+                        # Check if this is a role_id field that needs conversion
+                        if pg_col.lower() == 'role_id' and value_found and isinstance(value_found, str):
+                            value_found = _convert_role_to_int(value_found)
                     elif rule['type'] == 'auto-increment':
                         counter_key = f"{pg_table}.{pg_col}"
                         if counter_key not in counters:
                             counters[counter_key] = rule.get('start', 1)
                         value_found = counters[counter_key]
                         counters[counter_key] += rule.get('step', 1)
-                
+
                 except Exception as e:
                     print(f"Error processing rule for {pg_table}.{pg_col}: {e}")
-
+                
                 final_value = _apply_fallback_rules(value_found, rule, counters, pg_table, pg_col)
                 pg_values_dict[pg_col] = final_value
 
-            # Insert the fully formed row into PostgreSQL.
             final_pg_cols = list(pg_values_dict.keys())
             final_pg_values = list(pg_values_dict.values())
             quoted_columns = ', '.join(f'"{c}"' for c in final_pg_cols)
@@ -453,10 +575,6 @@ def _perform_migration(config):
 
             try:
                 pg_cursor.execute(insert_query, tuple(final_pg_values))
-                if config.get('handle_conflicts') and "UPDATE" in pg_cursor.statusmessage:
-                    migration_summary[pg_table]['updated'] += 1
-                elif pg_cursor.rowcount > 0:
-                    migration_summary[pg_table]['inserted'] += 1
             except (psycopg2.Error, Exception) as e:
                 pg_conn.rollback()
                 migration_summary[pg_table]['failed'] += 1
@@ -469,8 +587,13 @@ def _perform_migration(config):
                     }
                     migration_summary[pg_table]['errors'].append(error_detail)
             else:
-                pg_conn.commit()
-
+                if config.get('handle_conflicts') and "UPDATE" in pg_cursor.statusmessage:
+                    migration_summary[pg_table]['updated'] += 1
+                elif pg_cursor.rowcount > 0:
+                    migration_summary[pg_table]['inserted'] += 1
+        
+        pg_conn.commit()
+    
     pg_conn.close()
     return dict(migration_summary)
 
