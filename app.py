@@ -133,6 +133,8 @@ def run_migration():
         return jsonify({"error": f"The MySQL dump file was not found on the server at path: {config.get('mysql_dump_file_path')}"}), 404
     except Exception as e:
         print(f"A critical error occurred: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": f"A critical error occurred during migration: {str(e)}"}), 500
 
 @app.route('/api/get_column_data', methods=['POST'])
@@ -392,7 +394,6 @@ def _perform_migration(config):
                     all_data[mysql_table].append(dict(zip(mysql_cols, row)))
 
     # Pre-process all source data by applying all defined replacement rules.
-    # This ensures that all subsequent steps (merging, mapping) use the corrected values.
     print("Pre-processing source data with replacement rules...")
     for source_table, table_filters in filters.items():
         if 'replacements' in table_filters and source_table in all_data:
@@ -421,6 +422,36 @@ def _perform_migration(config):
 
     counters = {}
     cached_target_lookups = {}
+    
+    # *** NEW: Pre-computation cache for group_and_aggregate ***
+    aggregated_data_cache = {}
+
+    for pg_table in mapping_rules.keys():
+        rules = mapping_rules[pg_table]
+        for pg_col, rule in rules.items():
+            if rule.get('type') == 'group_and_aggregate':
+                source_table = rule['source_table']
+                group_by_col = rule['group_by_column']
+                aggregate_col = rule['aggregate_column']
+                
+                print(f" -> Pre-aggregating for {pg_table}.{pg_col} from {source_table}")
+                
+                # Create a cache key to avoid re-computing for the same aggregation rule
+                cache_key = f"{source_table}_{group_by_col}_{aggregate_col}"
+                if cache_key in aggregated_data_cache:
+                    continue
+
+                # Perform the aggregation from the in-memory data
+                aggregation_map = defaultdict(list)
+                for row in all_data.get(source_table, []):
+                    group_key = row.get(group_by_col)
+                    agg_value = row.get(aggregate_col)
+                    if group_key is not None:
+                        aggregation_map[group_key].append(agg_value)
+                
+                aggregated_data_cache[cache_key] = dict(aggregation_map)
+                print(f"  - Cached {len(aggregated_data_cache[cache_key])} groups.")
+
 
     for pg_table in mapping_rules.keys():
         rules = mapping_rules[pg_table]
@@ -509,12 +540,20 @@ def _perform_migration(config):
                 try:
                     if rule['type'] == 'direct':
                         value_found = source_row.get(rule['value'])
-                        # Check if this is a role_id field that needs conversion
                         if pg_col.lower() == 'role_id' and value_found and isinstance(value_found, str):
                             value_found = _convert_role_to_int(value_found)
-                        # Apply transformation if specified
                         if rule.get('transform') == 'convertRoleToInt':
                             value_found = _convert_role_to_int(value_found)
+                    
+                    # *** NEW: Handle group_and_aggregate ***
+                    elif rule['type'] == 'group_and_aggregate':
+                        group_by_col = rule['group_by_column']
+                        key_from_source_row = source_row.get(group_by_col)
+                        
+                        cache_key = f"{rule['source_table']}_{group_by_col}_{rule['aggregate_column']}"
+                        
+                        value_found = aggregated_data_cache.get(cache_key, {}).get(key_from_source_row, [])
+
                     elif rule['type'] == 'transformation':
                         value_found = _apply_transformation(source_row, rule)
                     elif rule['type'] == 'lookup':
@@ -543,7 +582,6 @@ def _perform_migration(config):
                         value_found = result[0] if result else rule.get('default', None)
                     elif rule['type'] == 'static':
                         value_found = rule['value']
-                        # Check if this is a role_id field that needs conversion
                         if pg_col.lower() == 'role_id' and value_found and isinstance(value_found, str):
                             value_found = _convert_role_to_int(value_found)
                     elif rule['type'] == 'auto-increment':
@@ -575,6 +613,10 @@ def _perform_migration(config):
 
             try:
                 pg_cursor.execute(insert_query, tuple(final_pg_values))
+                if config.get('handle_conflicts') and "UPDATE" in pg_cursor.statusmessage:
+                    migration_summary[pg_table]['updated'] += 1
+                elif pg_cursor.rowcount > 0:
+                    migration_summary[pg_table]['inserted'] += 1
             except (psycopg2.Error, Exception) as e:
                 pg_conn.rollback()
                 migration_summary[pg_table]['failed'] += 1
@@ -586,17 +628,11 @@ def _perform_migration(config):
                         "values": [str(v) for v in final_pg_values]
                     }
                     migration_summary[pg_table]['errors'].append(error_detail)
-            else:
-                if config.get('handle_conflicts') and "UPDATE" in pg_cursor.statusmessage:
-                    migration_summary[pg_table]['updated'] += 1
-                elif pg_cursor.rowcount > 0:
-                    migration_summary[pg_table]['inserted'] += 1
-        
+
         pg_conn.commit()
     
     pg_conn.close()
     return dict(migration_summary)
 
 if __name__ == '__main__':
-
-        app.run(debug=True, host='0.0.0.0')
+    app.run(debug=True, host='0.0.0.0', port=5000)

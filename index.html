@@ -56,10 +56,10 @@
         <div id="step2" class="bg-white p-6 rounded-lg shadow-md mb-8 hidden">
             <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Step 2: Connect to PostgreSQL</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input type="text" id="pgHost" placeholder="Hostname (e.g., localhost)" class="p-2 border rounded-md">
+                <input type="text" id="pgHost" placeholder="Hostname (e.g., localhost)" class="p-2 border rounded-md" value="localhost">
                 <input type="number" id="pgPort" value="5432" placeholder="Port" class="p-2 border rounded-md">
-                <input type="text" id="pgUser" placeholder="Username" class="p-2 border rounded-md">
-                <input type="password" id="pgPassword" placeholder="Password" class="p-2 border rounded-md">
+                <input type="text" id="pgUser" placeholder="Username" class="p-2 border rounded-md" value="postgres">
+                <input type="password" id="pgPassword" placeholder="Password" class="p-2 border rounded-md" value="password">
             </div>
             <button onclick="fetchDatabases()" class="mt-4 bg-green-600 text-white px-5 py-2 rounded-md hover:bg-green-700 transition">Connect & Fetch Databases</button>
         </div>
@@ -133,7 +133,7 @@
         let pgConnectionDetails = {};
         let mappingRules = {};
         let migrationFilters = {};
-        const API_BASE_URL = "http://192.168.1.16:5000";
+        const API_BASE_URL = "http://127.0.0.1:5000";
 
         // --- Initialization ---
         async function initializeStep1() {
@@ -568,8 +568,8 @@
                     sourceTables.add(rule.source_table);
                 }
                 if (rule.type === 'transformation' && rule.params && rule.params.columns) {
-                     // Transformations might not have a top-level source_table, but their columns do.
-                     // This part of logic is complex, for now we rely on top-level source_table.
+                    // Transformations might not have a top-level source_table, but their columns do.
+                    // This part of logic is complex, for now we rely on top-level source_table.
                 }
             }
             return Array.from(sourceTables);
@@ -607,7 +607,15 @@
                             const sourceEl = document.getElementById(`mysql-${tableName}-${rule.match_col}`);
                             if (sourceEl) sourceEl.classList.add('mapped');
                         });
+                    // *** NEW: Badge for group_and_aggregate ***
+                    } else if (rule.type === 'group_and_aggregate') {
+                        badgeText = `[AGG]`;
+                        const sourceEl = document.getElementById(`mysql-${rule.source_table}-${rule.group_by_column}`);
+                        if (sourceEl) sourceEl.classList.add('mapped');
+                        const sourceEl2 = document.getElementById(`mysql-${rule.source_table}-${rule.aggregate_column}`);
+                        if (sourceEl2) sourceEl2.classList.add('mapped');
                     }
+
 
                     const badge = document.createElement('span');
                     badge.className = 'mapping-info-badge';
@@ -654,6 +662,10 @@
                         sourceTables.forEach(tableName => {
                             drawLineFromSource(document.getElementById(`mysql-${tableName}-${rule.match_col}`));
                         });
+                    // *** NEW: Draw lines for group_and_aggregate ***
+                    } else if (rule.type === 'group_and_aggregate') {
+                        drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${rule.group_by_column}`));
+                        drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${rule.aggregate_column}`));
                     }
                 }
             }
@@ -673,6 +685,8 @@
                         <option value="none">-- None --</option>
                         <option value="direct">Direct Mapping (from Source)</option>
                         <option value="transformation">Transformation (e.g., CONCAT)</option>
+                        <!-- NEW: Add group_and_aggregate option -->
+                        <option value="group_and_aggregate">Group and Aggregate to Array</option>
                         <option value="lookup">Lookup from another Source Table</option>
                         <option value="target_lookup">Lookup from Target DB Table</option>
                         <option value="basic_target_lookup">Basic Target Lookup (Direct Query)</option>
@@ -772,32 +786,37 @@
                 });
 
                 if (type === 'basic_target_lookup') {
-                     html = `
-                        <p class="text-sm font-bold text-gray-700">This performs a direct query on the target DB for each row. Use with caution.</p>
-                        ${createSelect('lookup-table', 'Lookup From PG Table', lookupTableOptions)}
-                        ${createSelect('lookup-get-col', 'Get this column', '')}
-                        ${createSelect('lookup-match-col', 'Match using this column from the source row.', matchColOptions)}
-                        ${createInput('where-clause-input', 'WHERE Clause (use {value} for placeholder)', currentRule.where_clause || '')}
-                        ${createInput('order-by-clause-input', 'ORDER BY Clause (optional)', currentRule.order_by_clause || '')}
-                        ${createInput('lookup-default-val', 'Default value if not found (optional)', currentRule.default || '')}
-                    `;
+                        html = `
+                            <p class="text-sm font-bold text-gray-700">This performs a direct query on the target DB for each row. Use with caution.</p>
+                            ${createSelect('lookup-table', 'Lookup From PG Table', lookupTableOptions)}
+                            ${createSelect('lookup-get-col', 'Get this column', '')}
+                            ${createSelect('lookup-match-col', 'Match using this column from the source row.', matchColOptions)}
+                            ${createInput('where-clause-input', 'WHERE Clause (use {value} for placeholder)', currentRule.where_clause || '')}
+                            ${createInput('order-by-clause-input', 'ORDER BY Clause (optional)', currentRule.order_by_clause || '')}
+                            ${createInput('lookup-default-val', 'Default value if not found (optional)', currentRule.default || '')}
+                        `;
                 } else {
-                     html = `
-                        <p class="text-sm font-bold text-gray-700">1. Find a row in another ${lookupLabel} table...</p>
-                        ${createSelect('lookup-table', `Lookup From ${lookupLabel} Table`, lookupTableOptions)}
-                        ${createSelect('lookup-where-col', '...where this column...', '')}
-                        <p class="text-sm font-bold text-gray-700 mt-2">2. ...matches a value from the current source row.</p>
-                        ${createSelect('lookup-match-col', '...using this column from the source row.', matchColOptions)}
-                        <p class="text-sm font-bold text-gray-700 mt-2">3. Then get the result.</p>
-                        ${createSelect('lookup-get-col', 'Get value from this column in the found row', '')}
-                        ${createInput('lookup-default-val', 'Default value if not found (optional)', currentRule.default || '')}
-                    `;
+                        html = `
+                            <p class="text-sm font-bold text-gray-700">1. Find a row in another ${lookupLabel} table...</p>
+                            ${createSelect('lookup-table', `Lookup From ${lookupLabel} Table`, lookupTableOptions)}
+                            ${createSelect('lookup-where-col', '...where this column...', '')}
+                            <p class="text-sm font-bold text-gray-700 mt-2">2. ...matches a value from the current source row.</p>
+                            ${createSelect('lookup-match-col', '...using this column from the source row.', matchColOptions)}
+                            <p class="text-sm font-bold text-gray-700 mt-2">3. Then get the result.</p>
+                            ${createSelect('lookup-get-col', 'Get value from this column in the found row', '')}
+                            ${createInput('lookup-default-val', 'Default value if not found (optional)', currentRule.default || '')}
+                        `;
                 }
             } else if (type === 'transformation') {
                 const tableOptions = Object.keys(mysqlSchemaData).sort().map(t => `<option value="${t}">${t}</option>`).join('');
                 html = createSelect('transform-source-table', 'Source Table for Transformation', tableOptions);
                 html += createSelect('transform-function', 'Function', '<option value="CONCAT">CONCAT</option>');
                 html += `<div id="transform-params" class="p-2 border rounded-md bg-gray-50 space-y-2 mt-2"></div>`;
+            // *** NEW: UI for group_and_aggregate ***
+            } else if (type === 'group_and_aggregate') {
+                const tableOptions = Object.keys(mysqlSchemaData).sort().map(t => `<option value="${t}">${t}</option>`).join('');
+                html = createSelect('aggregate-source-table', 'Source Table for Aggregation', tableOptions);
+                html += `<div id="aggregate-cols-container" class="space-y-2 mt-2"></div>`;
             }
             container.innerHTML = html;
 
@@ -857,6 +876,28 @@
                 functionSelect.onchange = renderTransformParams;
                 if(currentRule.source_table) tableSelect.value = currentRule.source_table;
                 renderTransformParams();
+            // *** NEW: Logic for group_and_aggregate UI ***
+            } else if (type === 'group_and_aggregate') {
+                const tableSelect = document.getElementById('aggregate-source-table');
+                const renderAggregateParams = () => {
+                    const paramsContainer = document.getElementById('aggregate-cols-container');
+                    const colOptions = mysqlSchemaData[tableSelect.value].columns.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+                    paramsContainer.innerHTML = `
+                        ${createSelect('aggregate-group-by-col', 'Group By This Column', colOptions)}
+                        ${createSelect('aggregate-aggregate-col', 'Collect Values From This Column', colOptions)}
+                    `;
+                    if (currentRule.group_by_column) {
+                        document.getElementById('aggregate-group-by-col').value = currentRule.group_by_column;
+                    }
+                    if (currentRule.aggregate_column) {
+                        document.getElementById('aggregate-aggregate-col').value = currentRule.aggregate_column;
+                    }
+                };
+                tableSelect.onchange = renderAggregateParams;
+                if (currentRule.source_table) {
+                    tableSelect.value = currentRule.source_table;
+                }
+                renderAggregateParams();
             }
         }
         
@@ -909,7 +950,6 @@
             } else {
                 let newRule = { type };
                 
-                // Special handling for role_id columns that need to be integers
                 const isRoleIdColumn = pgCol.toLowerCase() === 'role_id';
                 
                 if (type === 'direct') {
@@ -917,12 +957,10 @@
                     newRule.value = selectedOption.value;
                     newRule.source_table = selectedOption.dataset.table;
                     
-                    // If this is a role_id column, add a transformation to convert to integer
                     if (isRoleIdColumn) {
                         newRule.transform = 'convertRoleToInt';
                     }
                 } else if (type === 'static') {
-                    // If this is a role_id column and the value is a string, try to convert to integer
                     if (isRoleIdColumn) {
                         const staticValue = document.getElementById('static-value').value;
                         newRule.value = convertRoleToInt(staticValue);
@@ -939,6 +977,11 @@
                         const columns = Array.from(document.querySelectorAll('.concat-col-select')).map(sel => sel.value);
                         newRule.params = { columns, separator: document.getElementById('transform-param-separator').value };
                     }
+                // *** NEW: Save group_and_aggregate rule ***
+                } else if (type === 'group_and_aggregate') {
+                    newRule.source_table = document.getElementById('aggregate-source-table').value;
+                    newRule.group_by_column = document.getElementById('aggregate-group-by-col').value;
+                    newRule.aggregate_column = document.getElementById('aggregate-aggregate-col').value;
                 } else if (type === 'lookup') {
                     newRule.lookup_source_table = document.getElementById('lookup-table').value;
                     newRule.where_col = document.getElementById('lookup-where-col').value;
@@ -946,7 +989,6 @@
                     newRule.match_col = document.getElementById('lookup-match-col').value;
                     newRule.default = document.getElementById('lookup-default-val').value;
                     
-                    // If this is a role_id column, make sure the default value is numeric
                     if (isRoleIdColumn && newRule.default) {
                         newRule.default = convertRoleToInt(newRule.default);
                     }
@@ -957,7 +999,6 @@
                     newRule.match_col = document.getElementById('lookup-match-col').value;
                     newRule.default = document.getElementById('lookup-default-val').value;
                     
-                    // If this is a role_id column, make sure the default value is numeric
                     if (isRoleIdColumn && newRule.default) {
                         newRule.default = convertRoleToInt(newRule.default);
                     }
@@ -969,7 +1010,6 @@
                     newRule.order_by_clause = document.getElementById('order-by-clause-input').value;
                     newRule.default = document.getElementById('lookup-default-val').value;
                     
-                    // If this is a role_id column, make sure the default value is numeric
                     if (isRoleIdColumn && newRule.default) {
                         newRule.default = convertRoleToInt(newRule.default);
                     }
@@ -980,7 +1020,6 @@
                     let fallbackRule = { type: fallbackType };
                     if (fallbackType === 'static') {
                         let fallbackValue = document.getElementById('fallback-static-value').value;
-                        // If this is a role_id column, convert the fallback value too
                         if (isRoleIdColumn) {
                             fallbackValue = convertRoleToInt(fallbackValue);
                         }
@@ -1012,7 +1051,7 @@
                         <h3 class="font-semibold mb-2">Data Merging (for multi-table sources)</h3>
                         <p class="text-sm text-gray-600 mb-2">If mapping from multiple source tables to one target, specify the column used to link rows from this table to others (e.g., 'id', 'user_id').</p>
                         <input type="text" id="merge-key-input" class="w-full p-2 border rounded-md" placeholder="e.g., id" value="${escapeHtml(tableFilters.merge_key || 'id')}">
-                     </div>`;
+                    </div>`;
             html += `<div class="mb-4 border-b pb-4">
                         <h3 class="font-semibold mb-2">Sort Source Data</h3>
                         <p class="text-sm text-gray-600 mb-2">Sort data before processing. Note: This is only applied when this is the only source table for a mapping.</p>
