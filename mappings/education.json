@@ -1,0 +1,44 @@
+{
+    "education": {
+        "user_id": {
+            "type": "direct",
+            "value": "teacher_id",
+            "source_table": "education"
+        },
+        "research_advisor": {
+            "type": "direct",
+            "value": "research_advisor",
+            "source_table": "education"
+        },
+        "specialization": {
+            "type": "direct",
+            "value": "specialization",
+            "source_table": "education"
+        },
+        "degree": {
+            "type": "direct",
+            "value": "edu_name",
+            "source_table": "education"
+        },
+        "institute": {
+            "type": "direct",
+            "value": "edu_place",
+            "source_table": "education"
+        },
+        "duration": {
+            "type": "transformation",
+            "source_table": "education",
+            "function": "CONCAT",
+            "params": {
+                "columns": [
+                    "end_year",
+                    "end_year"
+                ],
+                "separator": " -"
+            },
+            "on_null": {
+                "type": "set_null"
+            }
+        }
+    }
+}
