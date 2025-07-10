@@ -43,7 +43,7 @@
 
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800" onload="initializeStep1()">
+<body class="bg-gray-50 text-gray-800">
 
     <div class="container mx-auto p-4 md:p-8">
         <header class="text-center mb-8">
@@ -63,14 +63,14 @@
                         <select id="savedMappingsSelector" class="w-full p-2 border rounded-l-md">
                              <option value="">-- Loading mappings... --</option>
                         </select>
-                        <button onclick="loadSelectedMapping()" class="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700 transition">Load</button>
+                        <button id="loadMappingButton" class="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700 transition">Load</button>
                     </div>
                 </div>
                 <div>
                     <label for="newMappingNameInput" class="block text-sm font-medium text-gray-700 mb-1">Save Current Mapping</label>
                     <div class="flex">
                         <input type="text" id="newMappingNameInput" placeholder="Enter a name for this mapping" class="w-full p-2 border rounded-l-md">
-                        <button onclick="saveCurrentMapping()" class="bg-green-600 text-white px-4 py-2 rounded-r-md hover:bg-green-700 transition">Save</button>
+                        <button id="saveMappingButton" class="bg-green-600 text-white px-4 py-2 rounded-r-md hover:bg-green-700 transition">Save</button>
                     </div>
                 </div>
              </div>
@@ -84,7 +84,7 @@
                 <option value="">-- Loading files... --</option>
             </select>
             <input type="text" id="sqlFilePathInput" placeholder="/path/to/your/dump.sql" class="w-full p-2 border rounded-md hidden">
-            <button onclick="parseSqlFileOnServer()" class="mt-4 bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 transition">Parse SQL File</button>
+            <button id="parseSqlFileButton" class="mt-4 bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 transition">Parse SQL File</button>
         </div>
 
         <!-- Step 2: Connect to PostgreSQL -->
@@ -96,14 +96,14 @@
                 <input type="text" id="pgUser" placeholder="Username" class="p-2 border rounded-md" value="postgres">
                 <input type="password" id="pgPassword" placeholder="Password" class="p-2 border rounded-md" value="password">
             </div>
-            <button onclick="fetchDatabases()" class="mt-4 bg-green-600 text-white px-5 py-2 rounded-md hover:bg-green-700 transition">Connect & Fetch Databases</button>
+            <button id="fetchDatabasesButton" class="mt-4 bg-green-600 text-white px-5 py-2 rounded-md hover:bg-green-700 transition">Connect & Fetch Databases</button>
         </div>
         
         <!-- Step 2b: Select Database -->
         <div id="step2b-db-select" class="bg-white p-6 rounded-lg shadow-md mb-8 hidden">
             <h3 class="text-xl font-semibold mb-2">Select Target Database</h3>
             <select id="dbSelector" class="w-full p-2 border rounded-md mb-4"></select>
-            <button onclick="fetchTables()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition">Fetch Tables for Selected DB</button>
+            <button id="fetchTablesButton" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition">Fetch Tables for Selected DB</button>
         </div>
 
         <!-- Step 3: Mapping Interface -->
@@ -160,7 +160,7 @@
                     <span class="ml-2 text-gray-700">Update existing records on conflict (Upsert on 'id' column)</span>
                 </label>
             </div>
-            <button onclick="runMigration()" class="mt-4 bg-purple-600 text-white font-bold px-8 py-3 rounded-lg hover:bg-purple-700 transition shadow-lg">RUN MIGRATION</button>
+            <button id="runMigrationButton" class="mt-4 bg-purple-600 text-white font-bold px-8 py-3 rounded-lg hover:bg-purple-700 transition shadow-lg">RUN MIGRATION</button>
         </div>
 
     </div>
@@ -177,7 +177,7 @@
     </div>
     
     <!-- AI Chat Button and Modal -->
-    <button id="ai-chat-button" onclick="toggleAIChat()" class="bg-indigo-600 text-white p-4 rounded-full shadow-lg hover:bg-indigo-700 transition">
+    <button id="ai-chat-button" class="bg-indigo-600 text-white p-4 rounded-full shadow-lg hover:bg-indigo-700 transition">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
@@ -195,7 +195,7 @@
             <div class="mt-auto">
                 <div class="flex">
                     <textarea id="ai-chat-input" class="w-full p-2 border rounded-l-md" placeholder="Ask about mapping types, filters, or how to run the migration..."></textarea>
-                    <button id="ai-chat-send" onclick="sendChatMessage()" class="bg-indigo-600 text-white px-4 py-2 rounded-r-md hover:bg-indigo-700 transition">Send</button>
+                    <button id="ai-chat-send" class="bg-indigo-600 text-white px-4 py-2 rounded-r-md hover:bg-indigo-700 transition">Send</button>
                 </div>
             </div>
         </div>
@@ -211,7 +211,51 @@
         let migrationFilters = {};
         const API_BASE_URL = "http://127.0.0.1:5000";
 
-        // --- Initialization ---
+        // --- Initialization and Event Listeners ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeStep1();
+
+            // Attach event listeners to buttons to prevent default form submission behavior
+            document.getElementById('parseSqlFileButton').addEventListener('click', (e) => {
+                e.preventDefault();
+                parseSqlFileOnServer();
+            });
+            document.getElementById('fetchDatabasesButton').addEventListener('click', (e) => {
+                e.preventDefault();
+                fetchDatabases();
+            });
+            document.getElementById('fetchTablesButton').addEventListener('click', (e) => {
+                e.preventDefault();
+                fetchTables();
+            });
+            document.getElementById('runMigrationButton').addEventListener('click', (e) => {
+                e.preventDefault(); // This is the key fix for the page reload issue
+                runMigration();
+            });
+            document.getElementById('loadMappingButton').addEventListener('click', (e) => {
+                e.preventDefault();
+                loadSelectedMapping();
+            });
+            document.getElementById('saveMappingButton').addEventListener('click', (e) => {
+                e.preventDefault();
+                saveCurrentMapping();
+            });
+            document.getElementById('ai-chat-button').addEventListener('click', (e) => {
+                e.preventDefault();
+                toggleAIChat();
+            });
+            document.getElementById('ai-chat-send').addEventListener('click', (e) => {
+                e.preventDefault();
+                sendChatMessage();
+            });
+            document.getElementById('ai-chat-input').addEventListener('keypress', function (e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendChatMessage();
+                }
+            });
+        });
+
         async function initializeStep1() {
             const selector = document.getElementById('sqlFileSelector');
             try {
@@ -1411,10 +1455,10 @@
 
 Here is a summary of the tool's functionality:
 
-**Overall Goal:** To migrate schema and data from a MySQL \\\`.sql\\\` dump file into a live PostgreSQL database.
+**Overall Goal:** To migrate schema and data from a MySQL \\.sql\\ dump file into a live PostgreSQL database.
 
 **Workflow:**
-1.  **Step 1: Select MySQL Dump File:** The user selects a \\\`.sql\\\` file from the server or provides a full path to it. This file contains the \\\`CREATE TABLE\\\` and \\\`INSERT INTO\\\` statements for the source MySQL database.
+1.  **Step 1: Select MySQL Dump File:** The user selects a \\.sql\\ file from the server or provides a full path to it. This file contains the \\CREATE TABLE\\ and \\INSERT INTO\\ statements for the source MySQL database.
 2.  **Step 2: Connect to PostgreSQL:** The user provides connection details for their target PostgreSQL database. The tool then fetches a list of available databases for the user to choose from.
 3.  **Step 3: Map Tables and Columns:** This is the core of the tool.
     * The UI shows the source MySQL schema on the left and the target PostgreSQL schema on the right.
@@ -1422,16 +1466,16 @@ Here is a summary of the tool's functionality:
     * For more complex scenarios, users can click on a target column to open a detailed **Mapping Panel**.
 4.  **Mapping Panel Types:**
     * **Direct Mapping:** A direct 1-to-1 copy from a source column.
-    * **Transformation:** Apply a function. Currently, only \\\`CONCAT\\\` is supported, which joins values from multiple source columns with a separator.
-    * **Group and Aggregate to Array:** This is for one-to-many relationships. It groups rows by a specific column (e.g., \\\`user_id\\\`) and collects all values from another column (e.g., \\\`phone_number\\\`) into a PostgreSQL array.
-    * **Lookup (Source/Target):** Fetches a value from another table (either in the source dump or the live target DB) based on a matching key. For example, to get a \\\`user_name\\\` from a \\\`users\\\` table by matching the \\\`user_id\\\` from the current row.
+    * **Transformation:** Apply a function. Currently, only \\CONCAT\\ is supported, which joins values from multiple source columns with a separator.
+    * **Group and Aggregate to Array:** This is for one-to-many relationships. It groups rows by a specific column (e.g., \\user_id\\) and collects all values from another column (e.g., \\phone_number\\) into a PostgreSQL array.
+    * **Lookup (Source/Target):** Fetches a value from another table (either in the source dump or the live target DB) based on a matching key. For example, to get a \\user_name\\ from a \\users\\ table by matching the \\user_id\\ from the current row.
     * **Static Value:** Hardcode a specific value for the target column.
     * **Auto-Increment:** Generate a sequence of numbers.
 5.  **Table Settings:** By clicking the gear icon on a source table, users can define:
-    * **Filters (WHERE clause):** To only migrate a subset of data from a source table (e.g., \\\`status = 'active'\\\`).
+    * **Filters (WHERE clause):** To only migrate a subset of data from a source table (e.g., \\status = 'active'\\).
     * **Value Replacements:** To find and replace specific values in a column before migration (e.g., change 'T' to 'true').
 6.  **Custom SQL Commands:** A section where users can write raw SQL to be executed on the target database *before* the main data migration starts (pre-migration) or *after* it finishes (post-migration). This is useful for setting up extensions, creating indexes, or running cleanup scripts.
-7.  **Run Migration:** The final step. The user can choose to \\\`TRUNCATE\\\` (clear) target tables first and then run the migration. The tool processes everything and provides a summary.
+7.  **Run Migration:** The final step. The user can choose to \\TRUNCATE\\ (clear) target tables first and then run the migration. The tool processes everything and provides a summary.
 
 When a user asks a question, provide clear, concise, and helpful explanations based on this context. If they ask for an example, provide a realistic one related to database migration.`;
 
@@ -1444,14 +1488,11 @@ When a user asks a question, provide clear, concise, and helpful explanations ba
             const message = input.value.trim();
             if (!message) return;
 
-            // Add user message to UI
             addMessageToHistory('user', message);
             input.value = '';
 
-            // Add a thinking indicator
             const thinkingIndicator = addMessageToHistory('model', 'Thinking...');
             
-            // On the very first user message, prepend the system prompt
             if (chatHistory.length === 0) {
                 chatHistory.push({ role: "user", parts: [{ text: aiSystemPrompt + "\n\nHere is the user's first question: " + message }] });
             } else {
@@ -1480,14 +1521,12 @@ When a user asks a question, provide clear, concise, and helpful explanations ba
                     modelResponse = result.candidates[0].content.parts[0].text;
                 }
                 
-                // Update the thinking indicator with the actual response
-                thinkingIndicator.innerHTML = `<p>${modelResponse.replace(/\n/g, '<br>')}</p>`; // Basic formatting
+                thinkingIndicator.innerHTML = `<p>${modelResponse.replace(/\n/g, '<br>')}</p>`;
                 chatHistory.push({ role: "model", parts: [{ text: modelResponse }] });
 
             } catch (error) {
                  thinkingIndicator.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
             } finally {
-                // Scroll to the bottom of the chat history
                 const chatHistoryEl = document.getElementById('ai-chat-history');
                 chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
             }
@@ -1500,17 +1539,9 @@ When a user asks a question, provide clear, concise, and helpful explanations ba
             messageEl.innerHTML = `<p>${text}</p>`;
             historyEl.appendChild(messageEl);
             historyEl.scrollTop = historyEl.scrollHeight;
-            return messageEl; // Return the element so it can be updated
+            return messageEl;
         }
         
-        document.getElementById('ai-chat-input').addEventListener('keypress', function (e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendChatMessage();
-            }
-        });
-
-
         function closeSettingsModal() {
             document.getElementById('settings-modal').classList.add('hidden');
         }

@@ -462,7 +462,6 @@ def _perform_migration(config):
     filters = config.get('filters', {})
 
     try:
-        # --- NEW: Execute Pre-Migration Commands ---
         _execute_custom_commands(pg_cursor, config.get('pre_migration_commands'), migration_summary, 'pre_migration')
         pg_conn.commit()
 
@@ -552,7 +551,6 @@ def _perform_migration(config):
                 merged_source_data = defaultdict(dict)
                 primary_merge_key_processed = set()
                 
-                # Determine primary source table if possible (e.g., the one not used for lookups)
                 primary_source_table = list(source_tables_involved)[0]
 
                 for row in all_data.get(primary_source_table, []):
@@ -710,14 +708,12 @@ def _perform_migration(config):
 
             pg_conn.commit()
         
-        # --- NEW: Execute Post-Migration Commands ---
         _execute_custom_commands(pg_cursor, config.get('post_migration_commands'), migration_summary, 'post_migration')
         pg_conn.commit()
 
     finally:
         pg_conn.close()
 
-    # --- Save Migration Log ---
     try:
         _initialize_directories()
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")

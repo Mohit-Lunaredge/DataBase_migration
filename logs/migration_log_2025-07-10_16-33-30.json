@@ -1,0 +1,15 @@
+{
+    "timestamp": "2025-07-10_16-33-30",
+    "migration_config": {
+        "source_file": "sql_files\\facultydb.sql",
+        "target_db": "ECA",
+        "truncated_tables": true,
+        "handled_conflicts": true
+    },
+    "summary": {
+        "education": {
+            "errors": [],
+            "inserted": 44
+        }
+    }
+}

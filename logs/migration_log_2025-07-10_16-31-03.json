@@ -1,0 +1,76 @@
+{
+    "timestamp": "2025-07-10_16-31-03",
+    "migration_config": {
+        "source_file": "sql_files\\facultydb.sql",
+        "target_db": "ECA",
+        "truncated_tables": true,
+        "handled_conflicts": true
+    },
+    "summary": {
+        "education": {
+            "errors": [
+                {
+                    "error": "ERROR:  null value in column \"created_at\" of relation \"education\" violates not-null constraint\nDETAIL:  Failing row contains (1, 2004 -2004,  B.Tech.(Computer Engineering), Mody University, Lakshmangarh, null, null, 0, 2, 0, null, null).",
+                    "query": "INSERT INTO \"education\" (\"degree\", \"duration\", \"institute\", \"research_advisor\", \"specialization\", \"user_id\") VALUES (' B.Tech.(Computer Engineering)', '2004 -2004', 'Mody University, Lakshmangarh', NULL, NULL, '2') ON CONFLICT (\"id\") DO UPDATE SET \"degree\" = EXCLUDED.\"degree\", \"duration\" = EXCLUDED.\"duration\", \"institute\" = EXCLUDED.\"institute\", \"research_advisor\" = EXCLUDED.\"research_advisor\", \"specialization\" = EXCLUDED.\"specialization\", \"user_id\" = EXCLUDED.\"user_id\"",
+                    "values": [
+                        " B.Tech.(Computer Engineering)",
+                        "2004 -2004",
+                        "Mody University, Lakshmangarh",
+                        "None",
+                        "None",
+                        "2"
+                    ]
+                },
+                {
+                    "error": "ERROR:  null value in column \"created_at\" of relation \"education\" violates not-null constraint\nDETAIL:  Failing row contains (2, 2013 -2013, M.Tech.(Computer Engineering), Indian Institute of Technology Bombay, Implementation of Side Channel Attacks on AES in Modern Processo..., Prof. Bernard L. Menezes, 0, 2, 0, null, null).",
+                    "query": "INSERT INTO \"education\" (\"degree\", \"duration\", \"institute\", \"research_advisor\", \"specialization\", \"user_id\") VALUES ('M.Tech.(Computer Engineering)', '2013 -2013', 'Indian Institute of Technology Bombay', 'Prof. Bernard L. Menezes', 'Implementation of Side Channel Attacks on AES in Modern Processors', '2') ON CONFLICT (\"id\") DO UPDATE SET \"degree\" = EXCLUDED.\"degree\", \"duration\" = EXCLUDED.\"duration\", \"institute\" = EXCLUDED.\"institute\", \"research_advisor\" = EXCLUDED.\"research_advisor\", \"specialization\" = EXCLUDED.\"specialization\", \"user_id\" = EXCLUDED.\"user_id\"",
+                    "values": [
+                        "M.Tech.(Computer Engineering)",
+                        "2013 -2013",
+                        "Indian Institute of Technology Bombay",
+                        "Prof. Bernard L. Menezes",
+                        "Implementation of Side Channel Attacks on AES in Modern Processors",
+                        "2"
+                    ]
+                },
+                {
+                    "error": "ERROR:  null value in column \"created_at\" of relation \"education\" violates not-null constraint\nDETAIL:  Failing row contains (3, 2020 -2020, PhD (Computer Engineering), Malviya National Institute of Technology, Jaipur, Android Malware Analysis, Prof. Manoj Singh Gaur & Dr. Meenakshi Tripathi, 0, 2, 0, null, null).",
+                    "query": "INSERT INTO \"education\" (\"degree\", \"duration\", \"institute\", \"research_advisor\", \"specialization\", \"user_id\") VALUES ('PhD (Computer Engineering)', '2020 -2020', 'Malviya National Institute of Technology, Jaipur', 'Prof. Manoj Singh Gaur & Dr. Meenakshi Tripathi', 'Android Malware Analysis', '2') ON CONFLICT (\"id\") DO UPDATE SET \"degree\" = EXCLUDED.\"degree\", \"duration\" = EXCLUDED.\"duration\", \"institute\" = EXCLUDED.\"institute\", \"research_advisor\" = EXCLUDED.\"research_advisor\", \"specialization\" = EXCLUDED.\"specialization\", \"user_id\" = EXCLUDED.\"user_id\"",
+                    "values": [
+                        "PhD (Computer Engineering)",
+                        "2020 -2020",
+                        "Malviya National Institute of Technology, Jaipur",
+                        "Prof. Manoj Singh Gaur & Dr. Meenakshi Tripathi",
+                        "Android Malware Analysis",
+                        "2"
+                    ]
+                },
+                {
+                    "error": "ERROR:  null value in column \"created_at\" of relation \"education\" violates not-null constraint\nDETAIL:  Failing row contains (4, 1995 -1995, BE (Computer Sc & Engg), MBM Engineering College Jodhpur, null, null, 0, 3, 0, null, null).",
+                    "query": "INSERT INTO \"education\" (\"degree\", \"duration\", \"institute\", \"research_advisor\", \"specialization\", \"user_id\") VALUES ('BE (Computer Sc & Engg)', '1995 -1995', 'MBM Engineering College Jodhpur', NULL, NULL, '3') ON CONFLICT (\"id\") DO UPDATE SET \"degree\" = EXCLUDED.\"degree\", \"duration\" = EXCLUDED.\"duration\", \"institute\" = EXCLUDED.\"institute\", \"research_advisor\" = EXCLUDED.\"research_advisor\", \"specialization\" = EXCLUDED.\"specialization\", \"user_id\" = EXCLUDED.\"user_id\"",
+                    "values": [
+                        "BE (Computer Sc & Engg)",
+                        "1995 -1995",
+                        "MBM Engineering College Jodhpur",
+                        "None",
+                        "None",
+                        "3"
+                    ]
+                },
+                {
+                    "error": "ERROR:  null value in column \"created_at\" of relation \"education\" violates not-null constraint\nDETAIL:  Failing row contains (5, 2009 -2009, ME (Computer Science& Engg), NITTTR, punjab University Chandigarh, Computer Science & Engg, Dr Maitreyee Dutta, 0, 3, 0, null, null).",
+                    "query": "INSERT INTO \"education\" (\"degree\", \"duration\", \"institute\", \"research_advisor\", \"specialization\", \"user_id\") VALUES ('ME (Computer Science& Engg)', '2009 -2009', 'NITTTR, punjab University Chandigarh', 'Dr Maitreyee Dutta', 'Computer Science & Engg', '3') ON CONFLICT (\"id\") DO UPDATE SET \"degree\" = EXCLUDED.\"degree\", \"duration\" = EXCLUDED.\"duration\", \"institute\" = EXCLUDED.\"institute\", \"research_advisor\" = EXCLUDED.\"research_advisor\", \"specialization\" = EXCLUDED.\"specialization\", \"user_id\" = EXCLUDED.\"user_id\"",
+                    "values": [
+                        "ME (Computer Science& Engg)",
+                        "2009 -2009",
+                        "NITTTR, punjab University Chandigarh",
+                        "Dr Maitreyee Dutta",
+                        "Computer Science & Engg",
+                        "3"
+                    ]
+                }
+            ],
+            "failed": 44
+        }
+    }
+}
