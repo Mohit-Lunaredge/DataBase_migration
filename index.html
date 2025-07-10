@@ -41,6 +41,30 @@
         
         <div id="status-area" class="mb-4 p-4 text-center rounded-md hidden"></div>
 
+        <!-- NEW: Saved Mappings Section -->
+        <div id="saved-mappings-section" class="bg-white p-6 rounded-lg shadow-md mb-8">
+             <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Manage Mappings</h2>
+             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="savedMappingsSelector" class="block text-sm font-medium text-gray-700 mb-1">Load Existing Mapping</label>
+                    <div class="flex">
+                        <select id="savedMappingsSelector" class="w-full p-2 border rounded-l-md">
+                             <option value="">-- Loading mappings... --</option>
+                        </select>
+                        <button onclick="loadSelectedMapping()" class="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700 transition">Load</button>
+                    </div>
+                </div>
+                <div>
+                    <label for="newMappingNameInput" class="block text-sm font-medium text-gray-700 mb-1">Save Current Mapping</label>
+                    <div class="flex">
+                        <input type="text" id="newMappingNameInput" placeholder="Enter a name for this mapping" class="w-full p-2 border rounded-l-md">
+                        <button onclick="saveCurrentMapping()" class="bg-green-600 text-white px-4 py-2 rounded-r-md hover:bg-green-700 transition">Save</button>
+                    </div>
+                </div>
+             </div>
+        </div>
+
+
         <!-- Step 1: Provide MySQL Dump File Path -->
         <div id="step1" class="bg-white p-6 rounded-lg shadow-md mb-8">
             <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Step 1: Select MySQL Dump File</h2>
@@ -158,6 +182,7 @@
                 const customPathInput = document.getElementById('sqlFilePathInput');
                 customPathInput.classList.toggle('hidden', selector.value !== 'custom');
             };
+            loadSavedMappings(); // NEW: Load mappings on page start
         }
 
         // --- Status Update Function ---
@@ -607,7 +632,6 @@
                             const sourceEl = document.getElementById(`mysql-${tableName}-${rule.match_col}`);
                             if (sourceEl) sourceEl.classList.add('mapped');
                         });
-                    // *** NEW: Badge for group_and_aggregate ***
                     } else if (rule.type === 'group_and_aggregate') {
                         badgeText = `[AGG]`;
                         const sourceEl = document.getElementById(`mysql-${rule.source_table}-${rule.group_by_column}`);
@@ -662,7 +686,6 @@
                         sourceTables.forEach(tableName => {
                             drawLineFromSource(document.getElementById(`mysql-${tableName}-${rule.match_col}`));
                         });
-                    // *** NEW: Draw lines for group_and_aggregate ***
                     } else if (rule.type === 'group_and_aggregate') {
                         drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${rule.group_by_column}`));
                         drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${rule.aggregate_column}`));
@@ -685,7 +708,6 @@
                         <option value="none">-- None --</option>
                         <option value="direct">Direct Mapping (from Source)</option>
                         <option value="transformation">Transformation (e.g., CONCAT)</option>
-                        <!-- NEW: Add group_and_aggregate option -->
                         <option value="group_and_aggregate">Group and Aggregate to Array</option>
                         <option value="lookup">Lookup from another Source Table</option>
                         <option value="target_lookup">Lookup from Target DB Table</option>
@@ -812,7 +834,6 @@
                 html = createSelect('transform-source-table', 'Source Table for Transformation', tableOptions);
                 html += createSelect('transform-function', 'Function', '<option value="CONCAT">CONCAT</option>');
                 html += `<div id="transform-params" class="p-2 border rounded-md bg-gray-50 space-y-2 mt-2"></div>`;
-            // *** NEW: UI for group_and_aggregate ***
             } else if (type === 'group_and_aggregate') {
                 const tableOptions = Object.keys(mysqlSchemaData).sort().map(t => `<option value="${t}">${t}</option>`).join('');
                 html = createSelect('aggregate-source-table', 'Source Table for Aggregation', tableOptions);
@@ -820,7 +841,6 @@
             }
             container.innerHTML = html;
 
-            // Add dynamic event listeners and populate selects
             if (type === 'direct' && currentRule.value) {
                 const colSelect = document.getElementById('direct-source-col');
                 const optionToSelect = colSelect.querySelector(`option[value="${currentRule.value}"][data-table="${currentRule.source_table}"]`);
@@ -876,7 +896,6 @@
                 functionSelect.onchange = renderTransformParams;
                 if(currentRule.source_table) tableSelect.value = currentRule.source_table;
                 renderTransformParams();
-            // *** NEW: Logic for group_and_aggregate UI ***
             } else if (type === 'group_and_aggregate') {
                 const tableSelect = document.getElementById('aggregate-source-table');
                 const renderAggregateParams = () => {
@@ -927,14 +946,11 @@
             container.innerHTML = html;
         }
 
-        // Helper function to convert role string values to integers
         function convertRoleToInt(roleString) {
-            // Map role strings to integer values
             const roleMap = {
                 'admin': 1,
                 'teacher': 2,
                 'student': 3
-                // Add more mappings as needed
             };
             return roleMap[roleString.toLowerCase()] || roleString;
         }
@@ -977,7 +993,6 @@
                         const columns = Array.from(document.querySelectorAll('.concat-col-select')).map(sel => sel.value);
                         newRule.params = { columns, separator: document.getElementById('transform-param-separator').value };
                     }
-                // *** NEW: Save group_and_aggregate rule ***
                 } else if (type === 'group_and_aggregate') {
                     newRule.source_table = document.getElementById('aggregate-source-table').value;
                     newRule.group_by_column = document.getElementById('aggregate-group-by-col').value;
@@ -1235,6 +1250,111 @@
                  content.innerHTML = `<p class="text-red-500">Error: ${error.message}</p> <button onclick="closeDataPreviewModal()" class="mt-4 px-4 py-2 bg-gray-200 rounded-md">Close</button>`;
             }
         }
+
+        // --- NEW: Functions for Saving/Loading Mappings ---
+
+        async function loadSavedMappings() {
+            const selector = document.getElementById('savedMappingsSelector');
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/get_mappings`);
+                if (!response.ok) throw new Error('Failed to fetch mappings.');
+                const mappings = await response.json();
+                selector.innerHTML = '<option value="">-- Select a saved mapping --</option>';
+                mappings.forEach(name => {
+                    selector.innerHTML += `<option value="${name}">${name}</option>`;
+                });
+            } catch (error) {
+                selector.innerHTML = '<option value="">-- Could not load mappings --</option>';
+                handleFetchError(error, 'loading saved mappings');
+            }
+        }
+
+        async function saveCurrentMapping() {
+            const nameInput = document.getElementById('newMappingNameInput');
+            const mappingName = nameInput.value.trim();
+            if (!mappingName) {
+                alert('Please enter a name for the mapping.');
+                return;
+            }
+            if (Object.keys(mappingRules).length === 0) {
+                alert('There are no mapping rules to save.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/save_mapping`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: mappingName, config: mappingRules })
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || 'Failed to save mapping.');
+                showStatus(result.message, false);
+                nameInput.value = ''; // Clear input on success
+                loadSavedMappings(); // Refresh the list
+            } catch (error) {
+                handleFetchError(error, 'saving mapping');
+            }
+        }
+
+        async function loadSelectedMapping() {
+            const selector = document.getElementById('savedMappingsSelector');
+            const mappingName = selector.value;
+            if (!mappingName) {
+                alert('Please select a mapping to load.');
+                return;
+            }
+            if (!mysqlSchemaData || Object.keys(mysqlSchemaData).length === 0 || !postgresSchemaData || Object.keys(postgresSchemaData).length === 0) {
+                alert('Please load both source and target schemas before loading a mapping.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/load_mapping/${mappingName}`);
+                const loadedRules = await response.json();
+                if (!response.ok) throw new Error(loadedRules.error || 'Failed to load mapping.');
+
+                // Reset current state
+                mappingRules = loadedRules;
+                
+                // Determine which tables need to be visible
+                const sourceTablesToDisplay = new Set();
+                const targetTablesToDisplay = new Set();
+                for (const pgTable in mappingRules) {
+                    targetTablesToDisplay.add(pgTable);
+                    for (const pgCol in mappingRules[pgTable]) {
+                        const rule = mappingRules[pgTable][pgCol];
+                        if (rule.source_table) {
+                            sourceTablesToDisplay.add(rule.source_table);
+                        }
+                        if (rule.lookup_source_table) {
+                             sourceTablesToDisplay.add(rule.lookup_source_table);
+                        }
+                    }
+                }
+
+                // Update table filter checkboxes and visibility
+                document.querySelectorAll('#mysql-table-filter input[type="checkbox"]').forEach(cb => {
+                    cb.checked = sourceTablesToDisplay.has(cb.value);
+                });
+                document.querySelectorAll('#pg-table-filter input[type="checkbox"]').forEach(cb => {
+                    cb.checked = targetTablesToDisplay.has(cb.value);
+                });
+                
+                updateSourceTableVisibility();
+                updateTargetTableVisibility();
+                
+                // Use a timeout to ensure DOM is updated before drawing lines/badges
+                setTimeout(() => {
+                    updateColumnUIs();
+                    showStatus(`Mapping '${mappingName}' loaded successfully.`, false);
+                }, 100);
+
+            } catch (error) {
+                handleFetchError(error, 'loading selected mapping');
+            }
+        }
+
 
         function closeSettingsModal() {
             document.getElementById('settings-modal').classList.add('hidden');

@@ -3,6 +3,7 @@ import re
 import json
 import sys
 import os
+import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from collections import defaultdict
@@ -13,6 +14,9 @@ CORS(app)
 
 # --- Constants ---
 SQL_FILES_DIR = "sql_files"
+MAPPINGS_DIR = "mappings"
+LOGS_DIR = "logs"
+
 
 # --- Helper function to parse schema from a SQL file ---
 def _get_schema_from_sql_file(filepath):
@@ -223,6 +227,55 @@ def get_source_table_data():
 
     return jsonify({"headers": headers, "rows": table_data})
 
+# --- NEW: Mapping Save/Load Endpoints ---
+
+@app.route('/api/save_mapping', methods=['POST'])
+def save_mapping():
+    """Saves the current mapping configuration to a JSON file."""
+    data = request.json
+    name = data.get('name')
+    config = data.get('config')
+    if not name or not config:
+        return jsonify({"error": "Mapping name and config are required."}), 400
+    
+    try:
+        os.makedirs(MAPPINGS_DIR, exist_ok=True)
+        # Sanitize filename
+        safe_name = "".join([c for c in name if c.isalpha() or c.isdigit() or c in (' ', '_', '-')]).rstrip()
+        if not safe_name:
+            return jsonify({"error": "Invalid mapping name."}), 400
+        
+        filepath = os.path.join(MAPPINGS_DIR, f"{safe_name}.json")
+        with open(filepath, 'w') as f:
+            json.dump(config, f, indent=4)
+        return jsonify({"message": f"Mapping '{safe_name}' saved successfully."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/get_mappings', methods=['GET'])
+def get_mappings():
+    """Lists all saved mapping configuration files."""
+    if not os.path.isdir(MAPPINGS_DIR):
+        return jsonify([])
+    try:
+        files = [f.replace('.json', '') for f in os.listdir(MAPPINGS_DIR) if f.endswith('.json')]
+        return jsonify(sorted(files))
+    except Exception as e:
+        return jsonify({"error": f"Failed to list mappings: {str(e)}"}), 500
+
+@app.route('/api/load_mapping/<name>', methods=['GET'])
+def load_mapping(name):
+    """Loads a specific mapping configuration file."""
+    try:
+        filepath = os.path.join(MAPPINGS_DIR, f"{name}.json")
+        if os.path.exists(filepath):
+            with open(filepath, 'r') as f:
+                config = json.load(f)
+            return jsonify(config)
+        else:
+            return jsonify({"error": "Mapping not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # --- Core Migration Logic ---
 
@@ -423,7 +476,6 @@ def _perform_migration(config):
     counters = {}
     cached_target_lookups = {}
     
-    # *** NEW: Pre-computation cache for group_and_aggregate ***
     aggregated_data_cache = {}
 
     for pg_table in mapping_rules.keys():
@@ -436,12 +488,10 @@ def _perform_migration(config):
                 
                 print(f" -> Pre-aggregating for {pg_table}.{pg_col} from {source_table}")
                 
-                # Create a cache key to avoid re-computing for the same aggregation rule
                 cache_key = f"{source_table}_{group_by_col}_{aggregate_col}"
                 if cache_key in aggregated_data_cache:
                     continue
 
-                # Perform the aggregation from the in-memory data
                 aggregation_map = defaultdict(list)
                 for row in all_data.get(source_table, []):
                     group_key = row.get(group_by_col)
@@ -457,7 +507,6 @@ def _perform_migration(config):
         rules = mapping_rules[pg_table]
         print(f"\nProcessing target table: {pg_table}")
 
-        # Determine all unique source tables for this target table
         source_tables_involved = set()
         for _, rule in rules.items():
             if rule.get('source_table'):
@@ -469,7 +518,6 @@ def _perform_migration(config):
         
         print(f" -> Source tables involved: {', '.join(source_tables_involved)}")
 
-        # --- Data Merging & Filtering Logic ---
         iteration_data = []
         if len(source_tables_involved) > 1:
             print(" -> Multiple source tables found. Merging data...")
@@ -489,7 +537,6 @@ def _perform_migration(config):
             iteration_data = all_data[primary_source_table]
             
             table_filters = filters.get(primary_source_table, {})
-            # Note: Replacements are already applied in the pre-processing step.
             if 'where' in table_filters and table_filters['where']:
                 filtered_rows = [row for row in iteration_data if _check_where_condition(row, table_filters['where'])]
                 migration_summary[pg_table]['filtered_out'] += len(iteration_data) - len(filtered_rows)
@@ -499,7 +546,6 @@ def _perform_migration(config):
                 sort_settings = table_filters['sort']
                 iteration_data.sort(key=lambda item: _sort_key_helper(item, sort_settings['column']), reverse=(sort_settings.get('order', 'ASC').upper() == 'DESC'))
 
-        # --- Indexing for Lookups ---
         indexed_source_lookups = {}
         for _, rule in rules.items():
             if rule['type'] == 'lookup':
@@ -514,7 +560,6 @@ def _perform_migration(config):
                         if where_col in row and row.get(where_col) is not None
                     }
         
-        # --- Caching for Target Lookups ---
         for _, rule in rules.items():
             if rule['type'] == 'target_lookup':
                 lookup_table = rule['lookup_table']
@@ -532,7 +577,6 @@ def _perform_migration(config):
                         print(f" - ERROR: Could not cache target table {lookup_table}. Error: {e}")
                         migration_summary[pg_table]['errors'].append({"error": f"Failed to cache target lookup table {lookup_table}: {e}"})
 
-        # --- Row-by-Row Processing ---
         for source_row in iteration_data:
             pg_values_dict = {}
             for pg_col, rule in rules.items():
@@ -545,13 +589,10 @@ def _perform_migration(config):
                         if rule.get('transform') == 'convertRoleToInt':
                             value_found = _convert_role_to_int(value_found)
                     
-                    # *** NEW: Handle group_and_aggregate ***
                     elif rule['type'] == 'group_and_aggregate':
                         group_by_col = rule['group_by_column']
                         key_from_source_row = source_row.get(group_by_col)
-                        
                         cache_key = f"{rule['source_table']}_{group_by_col}_{rule['aggregate_column']}"
-                        
                         value_found = aggregated_data_cache.get(cache_key, {}).get(key_from_source_row, [])
 
                     elif rule['type'] == 'transformation':
@@ -632,6 +673,31 @@ def _perform_migration(config):
         pg_conn.commit()
     
     pg_conn.close()
+
+    # --- NEW: Save Migration Log ---
+    try:
+        os.makedirs(LOGS_DIR, exist_ok=True)
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        log_filename = f"migration_log_{timestamp}.json"
+        log_filepath = os.path.join(LOGS_DIR, log_filename)
+        
+        log_data = {
+            "timestamp": timestamp,
+            "migration_config": {
+                "source_file": config.get('mysql_dump_file_path'),
+                "target_db": config.get('pg_config', {}).get('dbname'),
+                "truncated_tables": config.get('truncate_tables'),
+                "handled_conflicts": config.get('handle_conflicts'),
+            },
+            "summary": dict(migration_summary)
+        }
+        
+        with open(log_filepath, 'w') as f:
+            json.dump(log_data, f, indent=4)
+        print(f"Migration log saved to {log_filepath}")
+    except Exception as e:
+        print(f"Error saving migration log: {e}", file=sys.stderr)
+
     return dict(migration_summary)
 
 if __name__ == '__main__':
