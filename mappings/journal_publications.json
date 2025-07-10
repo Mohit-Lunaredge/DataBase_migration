@@ -1,0 +1,46 @@
+{
+    "Journalpulications": {
+        "description": {
+            "type": "transformation",
+            "source_table": "journal_publications",
+            "function": "CONCAT",
+            "params": {
+                "parts": [
+                    {
+                        "type": "separator",
+                        "value": "{ "
+                    },
+                    {
+                        "type": "column",
+                        "value": "other_teacher"
+                    },
+                    {
+                        "type": "separator",
+                        "value": " \""
+                    },
+                    {
+                        "type": "column",
+                        "value": "publication_topic"
+                    },
+                    {
+                        "type": "separator",
+                        "value": "\" "
+                    },
+                    {
+                        "type": "column",
+                        "value": "publication_details"
+                    },
+                    {
+                        "type": "separator",
+                        "value": "  }"
+                    }
+                ]
+            }
+        },
+        "user_id": {
+            "type": "direct",
+            "value": "teacher_id",
+            "source_table": "journal_tags"
+        }
+    }
+}

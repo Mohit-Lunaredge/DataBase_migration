@@ -1,0 +1,68 @@
+{
+    "Masterthesis": {
+        "description": {
+            "type": "transformation",
+            "source_table": "thesis",
+            "function": "CONCAT",
+            "params": {
+                "parts": [
+                    {
+                        "type": "separator",
+                        "value": "{"
+                    },
+                    {
+                        "type": "column",
+                        "value": "guided"
+                    },
+                    {
+                        "type": "separator",
+                        "value": ", "
+                    },
+                    {
+                        "type": "separator",
+                        "value": " \""
+                    },
+                    {
+                        "type": "column",
+                        "value": "thesis_name"
+                    },
+                    {
+                        "type": "separator",
+                        "value": " \""
+                    },
+                    {
+                        "type": "separator",
+                        "value": " , "
+                    },
+                    {
+                        "type": "static",
+                        "value": "Since "
+                    },
+                    {
+                        "type": "column",
+                        "value": "start_year"
+                    },
+                    {
+                        "type": "separator",
+                        "value": " : "
+                    },
+                    {
+                        "type": "column",
+                        "value": "status"
+                    }
+                ]
+            },
+            "post_transform": {
+                "date_format": {
+                    "from": "%Y-%m-%d",
+                    "to": "%B %Y"
+                }
+            }
+        },
+        "user_id": {
+            "type": "direct",
+            "value": "teacher_id",
+            "source_table": "thesis_tags"
+        }
+    }
+}

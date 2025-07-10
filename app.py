@@ -383,7 +383,7 @@ def _convert_role_to_int(value):
     except (ValueError, TypeError):
         return value
 
-def _apply_transformation(source_row, rule):
+def _apply_transformation(source_row, rule, counters, pg_table, pg_col):
     """
     Applies transformations to source data according to mapping rules.
     """
@@ -392,17 +392,74 @@ def _apply_transformation(source_row, rule):
         return _convert_role_to_int(source_value)
         
     if rule['function'] == 'CONCAT':
-        parts = []
-        columns = rule['params'].get('columns', [])
-        for col in columns:
-            val = source_row.get(col, '')
-            if val is not None:
-                parts.append(str(val))
-            else:
-                parts.append('')
-        separator = rule['params'].get('separator', ' ')
-        return separator.join(parts)
+        final_parts = []
+        if 'parts' not in rule.get('params', {}):
+            return None
+
+        for part in rule['params']['parts']:
+            part_type = part.get('type')
+            if part_type == 'column':
+                val = source_row.get(part.get('value'), '')
+                final_parts.append(str(val) if val is not None else '')
+            elif part_type in ['static', 'separator']:
+                final_parts.append(str(part.get('value', '')))
+            elif part_type == 'auto-increment':
+                # Create a unique key for the counter for this specific transformation
+                counter_key = f"{pg_table}.{pg_col}.concat.{part.get('key', 'default_key')}"
+                if counter_key not in counters:
+                    counters[counter_key] = part.get('start', 1)
+                
+                current_val = counters[counter_key]
+                final_parts.append(str(current_val))
+                counters[counter_key] += part.get('step', 1)
+
+        return "".join(final_parts)
     return None
+
+def _apply_post_transformations(value, rule):
+    """Applies post-processing transformations like date formatting and type casting."""
+    if value is None:
+        return None
+
+    post_transform_rule = rule.get('post_transform')
+    if not post_transform_rule:
+        return value
+
+    transformed_value = value
+
+    # 1. Date Formatting
+    date_format_rule = post_transform_rule.get('date_format')
+    if date_format_rule and date_format_rule.get('from') and date_format_rule.get('to'):
+        try:
+            # First, try to parse the date from the given format
+            date_obj = datetime.datetime.strptime(str(transformed_value), date_format_rule['from'])
+            # Then, format it to the new format
+            transformed_value = date_obj.strftime(date_format_rule['to'])
+        except (ValueError, TypeError):
+            # If parsing fails, just keep the original value and proceed
+            pass
+
+    # 2. Type Casting
+    cast_to_type = post_transform_rule.get('cast_to')
+    if cast_to_type:
+        try:
+            if cast_to_type == 'integer':
+                transformed_value = int(float(transformed_value))
+            elif cast_to_type == 'float':
+                transformed_value = float(transformed_value)
+            elif cast_to_type == 'string':
+                transformed_value = str(transformed_value)
+            elif cast_to_type == 'boolean':
+                # Handle common boolean string representations
+                if str(transformed_value).lower() in ['true', 't', '1', 'yes', 'y']:
+                    transformed_value = True
+                else:
+                    transformed_value = False
+        except (ValueError, TypeError):
+            # If casting fails, return the value as it was before casting
+            pass
+            
+    return transformed_value
 
 def _apply_fallback_rules(value, rule, counters, pg_table, pg_col):
     """Applies fallback rules if the primary value is None or an empty string."""
@@ -620,19 +677,13 @@ def _perform_migration(config):
                     try:
                         if rule['type'] == 'direct':
                             value_found = source_row.get(rule['value'])
-                            if pg_col.lower() == 'role_id' and value_found and isinstance(value_found, str):
-                                value_found = _convert_role_to_int(value_found)
-                            if rule.get('transform') == 'convertRoleToInt':
-                                value_found = _convert_role_to_int(value_found)
-                        
                         elif rule['type'] == 'group_and_aggregate':
                             group_by_col = rule['group_by_column']
                             key_from_source_row = source_row.get(group_by_col)
                             cache_key = f"{rule['source_table']}_{group_by_col}_{rule['aggregate_column']}"
                             value_found = aggregated_data_cache.get(cache_key, {}).get(key_from_source_row, [])
-
                         elif rule['type'] == 'transformation':
-                            value_found = _apply_transformation(source_row, rule)
+                            value_found = _apply_transformation(source_row, rule, counters, pg_table, pg_col)
                         elif rule['type'] == 'lookup':
                             match_value = str(source_row.get(rule['match_col']))
                             index_key = f"source_{rule['lookup_source_table']}_{rule['where_col']}"
@@ -659,8 +710,6 @@ def _perform_migration(config):
                             value_found = result[0] if result else rule.get('default', None)
                         elif rule['type'] == 'static':
                             value_found = rule['value']
-                            if pg_col.lower() == 'role_id' and value_found and isinstance(value_found, str):
-                                value_found = _convert_role_to_int(value_found)
                         elif rule['type'] == 'auto-increment':
                             counter_key = f"{pg_table}.{pg_col}"
                             if counter_key not in counters:
@@ -671,7 +720,12 @@ def _perform_migration(config):
                     except Exception as e:
                         print(f"Error processing rule for {pg_table}.{pg_col}: {e}")
                     
-                    final_value = _apply_fallback_rules(value_found, rule, counters, pg_table, pg_col)
+                    # Apply post-processing transformations
+                    processed_value = _apply_post_transformations(value_found, rule)
+                    
+                    # Apply fallbacks if the processed value is null/empty
+                    final_value = _apply_fallback_rules(processed_value, rule, counters, pg_table, pg_col)
+                    
                     pg_values_dict[pg_col] = final_value
 
                 final_pg_cols = list(pg_values_dict.keys())

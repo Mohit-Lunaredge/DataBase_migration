@@ -29,18 +29,6 @@
         .data-preview-table th, .data-preview-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         .data-preview-table th { background-color: #f2f2f2; }
         .hidden { display: none !important; }
-        
-        /* AI Chat Styles */
-        #ai-chat-button { position: fixed; bottom: 2rem; right: 2rem; z-index: 100; }
-        #ai-chat-modal .modal-content { width: 90vw; max-width: 600px; height: 80vh; display: flex; flex-direction: column; }
-        #ai-chat-history { flex-grow: 1; overflow-y: auto; padding: 1rem; border: 1px solid #e2e8f0; border-radius: 0.25rem; margin-bottom: 1rem; }
-        .chat-message { margin-bottom: 1rem; padding: 0.75rem; border-radius: 0.5rem; max-width: 85%; }
-        .chat-message.user { background-color: #ebf8ff; margin-left: auto; }
-        .chat-message.model { background-color: #f7fafc; }
-        .chat-message p { margin: 0; }
-        .chat-message pre { background-color: #2d3748; color: #e2e8f0; padding: 0.75rem; margin-top: 0.5rem; border-radius: 0.25rem; white-space: pre-wrap; word-break: break-all; }
-        .chat-message code { background-color: #edf2f7; padding: 2px 4px; border-radius: 4px; font-family: monospace; }
-
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -63,14 +51,14 @@
                         <select id="savedMappingsSelector" class="w-full p-2 border rounded-l-md">
                              <option value="">-- Loading mappings... --</option>
                         </select>
-                        <button id="loadMappingButton" class="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700 transition">Load</button>
+                        <button id="loadMappingButton" type="button" class="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700 transition">Load</button>
                     </div>
                 </div>
                 <div>
                     <label for="newMappingNameInput" class="block text-sm font-medium text-gray-700 mb-1">Save Current Mapping</label>
                     <div class="flex">
                         <input type="text" id="newMappingNameInput" placeholder="Enter a name for this mapping" class="w-full p-2 border rounded-l-md">
-                        <button id="saveMappingButton" class="bg-green-600 text-white px-4 py-2 rounded-r-md hover:bg-green-700 transition">Save</button>
+                        <button id="saveMappingButton" type="button" class="bg-green-600 text-white px-4 py-2 rounded-r-md hover:bg-green-700 transition">Save</button>
                     </div>
                 </div>
              </div>
@@ -84,7 +72,7 @@
                 <option value="">-- Loading files... --</option>
             </select>
             <input type="text" id="sqlFilePathInput" placeholder="/path/to/your/dump.sql" class="w-full p-2 border rounded-md hidden">
-            <button id="parseSqlFileButton" class="mt-4 bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 transition">Parse SQL File</button>
+            <button id="parseSqlFileButton" type="button" class="mt-4 bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 transition">Parse SQL File</button>
         </div>
 
         <!-- Step 2: Connect to PostgreSQL -->
@@ -96,14 +84,14 @@
                 <input type="text" id="pgUser" placeholder="Username" class="p-2 border rounded-md" value="postgres">
                 <input type="password" id="pgPassword" placeholder="Password" class="p-2 border rounded-md" value="password">
             </div>
-            <button id="fetchDatabasesButton" class="mt-4 bg-green-600 text-white px-5 py-2 rounded-md hover:bg-green-700 transition">Connect & Fetch Databases</button>
+            <button id="fetchDatabasesButton" type="button" class="mt-4 bg-green-600 text-white px-5 py-2 rounded-md hover:bg-green-700 transition">Connect & Fetch Databases</button>
         </div>
         
         <!-- Step 2b: Select Database -->
         <div id="step2b-db-select" class="bg-white p-6 rounded-lg shadow-md mb-8 hidden">
             <h3 class="text-xl font-semibold mb-2">Select Target Database</h3>
             <select id="dbSelector" class="w-full p-2 border rounded-md mb-4"></select>
-            <button id="fetchTablesButton" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition">Fetch Tables for Selected DB</button>
+            <button id="fetchTablesButton" type="button" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition">Fetch Tables for Selected DB</button>
         </div>
 
         <!-- Step 3: Mapping Interface -->
@@ -160,7 +148,7 @@
                     <span class="ml-2 text-gray-700">Update existing records on conflict (Upsert on 'id' column)</span>
                 </label>
             </div>
-            <button id="runMigrationButton" class="mt-4 bg-purple-600 text-white font-bold px-8 py-3 rounded-lg hover:bg-purple-700 transition shadow-lg">RUN MIGRATION</button>
+            <button id="runMigrationButton" type="button" class="mt-4 bg-purple-600 text-white font-bold px-8 py-3 rounded-lg hover:bg-purple-700 transition shadow-lg">RUN MIGRATION</button>
         </div>
 
     </div>
@@ -175,32 +163,6 @@
     <div id="data-preview-modal" class="modal-overlay hidden">
         <div id="data-preview-content" class="modal-content"></div>
     </div>
-    
-    <!-- AI Chat Button and Modal -->
-    <button id="ai-chat-button" class="bg-indigo-600 text-white p-4 rounded-full shadow-lg hover:bg-indigo-700 transition">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-        </svg>
-    </button>
-
-    <div id="ai-chat-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <div class="flex justify-between items-center mb-4 border-b pb-2">
-                <h2 class="text-2xl font-bold">Migration AI Assistant</h2>
-                <button onclick="toggleAIChat()" class="text-2xl font-bold">&times;</button>
-            </div>
-            <div id="ai-chat-history">
-                <div class="chat-message model"><p>Hello! I'm your migration assistant. How can I help you understand or use this tool today?</p></div>
-            </div>
-            <div class="mt-auto">
-                <div class="flex">
-                    <textarea id="ai-chat-input" class="w-full p-2 border rounded-l-md" placeholder="Ask about mapping types, filters, or how to run the migration..."></textarea>
-                    <button id="ai-chat-send" class="bg-indigo-600 text-white px-4 py-2 rounded-r-md hover:bg-indigo-700 transition">Send</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
 
     <script>
         // Global state variables
@@ -215,45 +177,13 @@
         document.addEventListener('DOMContentLoaded', () => {
             initializeStep1();
 
-            // Attach event listeners to buttons to prevent default form submission behavior
-            document.getElementById('parseSqlFileButton').addEventListener('click', (e) => {
-                e.preventDefault();
-                parseSqlFileOnServer();
-            });
-            document.getElementById('fetchDatabasesButton').addEventListener('click', (e) => {
-                e.preventDefault();
-                fetchDatabases();
-            });
-            document.getElementById('fetchTablesButton').addEventListener('click', (e) => {
-                e.preventDefault();
-                fetchTables();
-            });
-            document.getElementById('runMigrationButton').addEventListener('click', (e) => {
-                e.preventDefault(); // This is the key fix for the page reload issue
-                runMigration();
-            });
-            document.getElementById('loadMappingButton').addEventListener('click', (e) => {
-                e.preventDefault();
-                loadSelectedMapping();
-            });
-            document.getElementById('saveMappingButton').addEventListener('click', (e) => {
-                e.preventDefault();
-                saveCurrentMapping();
-            });
-            document.getElementById('ai-chat-button').addEventListener('click', (e) => {
-                e.preventDefault();
-                toggleAIChat();
-            });
-            document.getElementById('ai-chat-send').addEventListener('click', (e) => {
-                e.preventDefault();
-                sendChatMessage();
-            });
-            document.getElementById('ai-chat-input').addEventListener('keypress', function (e) {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendChatMessage();
-                }
-            });
+            // Attach event listeners to buttons
+            document.getElementById('parseSqlFileButton').addEventListener('click', parseSqlFileOnServer);
+            document.getElementById('fetchDatabasesButton').addEventListener('click', fetchDatabases);
+            document.getElementById('fetchTablesButton').addEventListener('click', fetchTables);
+            document.getElementById('runMigrationButton').addEventListener('click', runMigration);
+            document.getElementById('loadMappingButton').addEventListener('click', loadSelectedMapping);
+            document.getElementById('saveMappingButton').addEventListener('click', saveCurrentMapping);
         });
 
         async function initializeStep1() {
@@ -493,6 +423,7 @@
             const dropdownContainer = document.createElement('div');
             dropdownContainer.className = 'relative';
             const dropdownButton = document.createElement('button');
+            dropdownButton.type = 'button';
             dropdownButton.className = 'w-full text-left p-2 border rounded-md bg-white flex justify-between items-center';
             dropdownButton.innerHTML = '<span>Select tables to display...</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
             const dropdownPanel = document.createElement('div');
@@ -576,12 +507,14 @@
                 btnGroup.className = 'flex items-center space-x-2';
                 
                 const viewBtn = document.createElement('button');
+                viewBtn.type = 'button';
                 viewBtn.innerHTML = `<svg class="w-5 h-5 text-gray-500 hover:text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>`;
                 viewBtn.onclick = () => viewSourceTable(tableName);
                 viewBtn.title = "View Full Table Data";
                 btnGroup.appendChild(viewBtn);
 
                 const settingsBtn = document.createElement('button');
+                settingsBtn.type = 'button';
                 settingsBtn.innerHTML = `<svg class="w-5 h-5 text-gray-500 hover:text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>`;
                 settingsBtn.onclick = () => openSettingsModal(tableName);
                 settingsBtn.title = "Table Settings (Sort, Filter, Replace)";
@@ -615,7 +548,7 @@
                     nameAndType.innerHTML = `
                         <span>${col.name}</span>
                         <span class="data-type">(${col.type})</span>
-                        <button onclick="event.stopPropagation(); viewColumnData('${tableName}', '${col.name}')" class="ml-2 text-gray-400 hover:text-blue-600" title="Preview Unique Column Values">
+                        <button type="button" onclick="event.stopPropagation(); viewColumnData('${tableName}', '${col.name}')" class="ml-2 text-gray-400 hover:text-blue-600" title="Preview Unique Column Values">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                         </button>
                     `;
@@ -719,10 +652,14 @@
                         badgeText = `[AUTO-INC]`;
                     } else if (rule.type === 'transformation') {
                         badgeText = `[${rule.function}]`;
-                        rule.params.columns.forEach(sourceColName => {
-                            const sourceEl = document.getElementById(`mysql-${rule.source_table}-${sourceColName}`);
-                            if(sourceEl) sourceEl.classList.add('mapped');
-                        });
+                        if (rule.params && rule.params.parts) {
+                            rule.params.parts.forEach(part => {
+                                if (part.type === 'column') {
+                                    const sourceEl = document.getElementById(`mysql-${rule.source_table}-${part.value}`);
+                                    if(sourceEl) sourceEl.classList.add('mapped');
+                                }
+                            });
+                        }
                     } else if (rule.type === 'lookup' || rule.type === 'target_lookup' || rule.type === 'basic_target_lookup') {
                         badgeText = rule.type.includes('target') ? `[T-LOOKUP]` : `[S-LOOKUP]`;
                         const sourceTables = findSourceTablesForTarget(pgTable).length > 0 ? findSourceTablesForTarget(pgTable) : Object.keys(mysqlSchemaData);
@@ -738,6 +675,14 @@
                         if (sourceEl2) sourceEl2.classList.add('mapped');
                     }
 
+                    if (rule.post_transform) {
+                        if (rule.post_transform.date_format && rule.post_transform.date_format.from) {
+                            badgeText += ' [DATE]';
+                        }
+                        if (rule.post_transform.cast_to) {
+                            badgeText += ` [${rule.post_transform.cast_to.toUpperCase()}]`;
+                        }
+                    }
 
                     const badge = document.createElement('span');
                     badge.className = 'mapping-info-badge';
@@ -777,8 +722,12 @@
 
                     if (rule.type === 'direct') {
                         drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${rule.value}`));
-                    } else if (rule.type === 'transformation') {
-                        rule.params.columns.forEach(col => drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${col}`)));
+                    } else if (rule.type === 'transformation' && rule.params && rule.params.parts) {
+                         rule.params.parts.forEach(part => {
+                            if (part.type === 'column') {
+                                drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${part.value}`));
+                            }
+                        });
                     } else if (rule.type === 'lookup' || rule.type === 'target_lookup' || rule.type === 'basic_target_lookup') {
                         const sourceTables = findSourceTablesForTarget(pgTable).length > 0 ? findSourceTablesForTarget(pgTable) : Object.keys(mysqlSchemaData);
                         sourceTables.forEach(tableName => {
@@ -815,8 +764,35 @@
                     </select>
                 </div>
                 <div id="mapping-options" class="space-y-4 border-t pt-4"></div>
+                
+                <!-- Post-Processing Transformations -->
+                <div id="post-processing-container" class="mt-6 border-t pt-4">
+                    <h3 class="font-semibold text-lg mb-2">Post-Processing</h3>
+                    <p class="text-sm text-gray-600 mb-3">Apply transformations after the main value is determined.</p>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block font-semibold text-sm mb-1">Change Data Type (Cast)</label>
+                            <select id="post-transform-cast" class="w-full p-2 border rounded-md">
+                                <option value="">-- Don't Change --</option>
+                                <option value="string">String</option>
+                                <option value="integer">Integer</option>
+                                <option value="float">Float</option>
+                                <option value="boolean">Boolean</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block font-semibold text-sm mb-1">Re-format Date</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="text" id="post-transform-date-from" class="w-full p-2 border rounded-md" placeholder="Source Format (e.g., %Y-%m-%d)">
+                                <input type="text" id="post-transform-date-to" class="w-full p-2 border rounded-md" placeholder="Target Format (e.g., %d %B %Y)">
+                            </div>
+                             <p class="text-xs text-gray-500 mt-1">Uses Python strptime/strftime format codes. Leave blank to disable.</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Fallback Options -->
-                <div class="mt-6 border-t pt-4">
+                <div id="fallback-container" class="mt-6 border-t pt-4">
                     <h3 class="font-semibold text-lg mb-2">Fallback for Empty/Null Values</h3>
                     <p class="text-sm text-gray-600 mb-3">If the mapping result is empty or NULL, use this fallback. This is ignored for Static and Auto-Increment mapping types.</p>
                     <div class="flex items-center mb-3">
@@ -833,8 +809,8 @@
                     </div>
                 </div>
                 <div class="flex justify-end space-x-4 mt-6">
-                    <button onclick="closeMappingPanelModal()" class="px-4 py-2 bg-gray-200 rounded-md">Cancel</button>
-                    <button onclick="saveMappingRule('${pgTable}', '${pgCol.name}')" class="px-4 py-2 bg-blue-600 text-white rounded-md">Save Mapping</button>
+                    <button type="button" onclick="closeMappingPanelModal()" class="px-4 py-2 bg-gray-200 rounded-md">Cancel</button>
+                    <button type="button" onclick="saveMappingRule('${pgTable}', '${pgCol.name}')" class="px-4 py-2 bg-blue-600 text-white rounded-md">Save Mapping</button>
                 </div>
             `;
             content.innerHTML = html;
@@ -845,8 +821,13 @@
             const fallbackTypeSelector = document.getElementById('fallback-type-selector');
 
             typeSelector.onchange = () => {
-                const isFallbackDisabled = ['static', 'auto-increment', 'none'].includes(typeSelector.value);
-                document.querySelector('.mt-6.border-t.pt-4').style.display = isFallbackDisabled ? 'none' : 'block';
+                const type = typeSelector.value;
+                const isFallbackDisabled = ['static', 'auto-increment', 'none'].includes(type);
+                const isPostProcessingDisabled = ['group_and_aggregate', 'none'].includes(type);
+                
+                document.getElementById('fallback-container').style.display = isFallbackDisabled ? 'none' : 'block';
+                document.getElementById('post-processing-container').style.display = isPostProcessingDisabled ? 'none' : 'block';
+
                 renderMappingOptions(pgTable, pgCol.name);
             };
             fallbackEnabledCheckbox.onchange = () => {
@@ -862,6 +843,19 @@
                 fallbackContainer.classList.remove('hidden');
                 fallbackTypeSelector.value = currentRule.on_null.type;
             }
+            if (currentRule.post_transform) {
+                const castSelect = document.getElementById('post-transform-cast');
+                const dateFromInput = document.getElementById('post-transform-date-from');
+                const dateToInput = document.getElementById('post-transform-date-to');
+                if (currentRule.post_transform.cast_to) {
+                    castSelect.value = currentRule.post_transform.cast_to;
+                }
+                if (currentRule.post_transform.date_format) {
+                    dateFromInput.value = currentRule.post_transform.date_format.from || '';
+                    dateToInput.value = currentRule.post_transform.date_format.to || '';
+                }
+            }
+
             typeSelector.dispatchEvent(new Event('change'));
             renderFallbackOptions(currentRule.on_null);
             modal.classList.remove('hidden');
@@ -972,22 +966,17 @@
                 const renderTransformParams = () => {
                     const paramsContainer = document.getElementById('transform-params');
                     if (functionSelect.value === 'CONCAT') {
-                        const colOptions = mysqlSchemaData[tableSelect.value].columns.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
                         paramsContainer.innerHTML = `
-                            <p class="text-sm font-medium">CONCAT Parameters</p>
-                            <div id="concat-cols-container" class="space-y-1">
-                                <select class="w-full p-1 border rounded-md text-sm concat-col-select">${colOptions}</select>
-                                <select class="w-full p-1 border rounded-md text-sm concat-col-select">${colOptions}</select>
-                            </div>
-                            <button onclick="addConcatColumn('${tableSelect.value}')" class="text-xs text-blue-600 hover:underline">+ Add another column</button>
-                            ${createInput('transform-param-separator', 'Separator', currentRule.params?.separator || ' ')}
+                            <p class="text-sm font-medium">CONCAT Builder</p>
+                            <div id="concat-parts-container" class="space-y-2"></div>
+                            <button type="button" onclick="addConcatPart()" class="text-xs text-blue-600 hover:underline">+ Add Part</button>
                         `;
-                        if(currentRule.params?.columns) {
-                            const selects = paramsContainer.querySelectorAll('.concat-col-select');
-                            selects.forEach((sel, i) => {
-                                if (currentRule.params.columns[i]) sel.value = currentRule.params.columns[i];
-                            });
-                        }
+                        const parts = currentRule.params?.parts || [
+                            { type: 'column', value: '' }, 
+                            { type: 'separator', value: ' ' }, 
+                            { type: 'column', value: '' }
+                        ];
+                        renderConcatParts(parts);
                     }
                 };
                 tableSelect.onchange = renderTransformParams;
@@ -1018,14 +1007,103 @@
             }
         }
         
-        function addConcatColumn(tableName) {
-            const container = document.getElementById('concat-cols-container');
-            const colOptions = mysqlSchemaData[tableName].columns.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-            const newSelect = document.createElement('select');
-            newSelect.className = 'w-full p-1 border rounded-md text-sm concat-col-select';
-            newSelect.innerHTML = colOptions;
-            container.appendChild(newSelect);
+        // --- CONCAT Builder Functions ---
+        function renderConcatParts(parts) {
+            const container = document.getElementById('concat-parts-container');
+            container.innerHTML = ''; // Clear existing
+            const sourceTable = document.getElementById('transform-source-table').value;
+            const colOptions = mysqlSchemaData[sourceTable]?.columns.map(c => `<option value="${c.name}">${c.name}</option>`).join('') || '';
+
+            parts.forEach((part, index) => {
+                const partDiv = document.createElement('div');
+                partDiv.className = 'flex items-center space-x-2 p-2 border rounded-md bg-white';
+                partDiv.dataset.index = index;
+
+                let partHtml = `
+                    <select class="p-1 border rounded-md text-sm part-type-select" onchange="handleConcatPartTypeChange(this)">
+                        <option value="column" ${part.type === 'column' ? 'selected' : ''}>Column</option>
+                        <option value="static" ${part.type === 'static' ? 'selected' : ''}>Static Text</option>
+                        <option value="separator" ${part.type === 'separator' ? 'selected' : ''}>Separator</option>
+                        <option value="auto-increment" ${part.type === 'auto-increment' ? 'selected' : ''}>Auto-Increment</option>
+                    </select>
+                    <div class="part-value-container flex-grow"></div>
+                    <button type="button" onclick="removeConcatPart(this)" class="text-red-500 hover:text-red-700 font-bold">&times;</button>
+                `;
+                partDiv.innerHTML = partHtml;
+                container.appendChild(partDiv);
+                
+                const valueContainer = partDiv.querySelector('.part-value-container');
+                renderConcatPartValueInput(valueContainer, part, colOptions);
+            });
         }
+
+        function renderConcatPartValueInput(container, part, colOptions) {
+            let inputHtml = '';
+            switch(part.type) {
+                case 'column':
+                    inputHtml = `<select class="w-full p-1 border rounded-md text-sm part-value">${colOptions}</select>`;
+                    break;
+                case 'static':
+                case 'separator':
+                    inputHtml = `<input type="text" class="w-full p-1 border rounded-md text-sm part-value" placeholder="Enter text" value="${escapeHtml(part.value || '')}">`;
+                    break;
+                case 'auto-increment':
+                    inputHtml = `
+                        <div class="flex space-x-1 text-sm">
+                            <input type="text" class="w-1/2 p-1 border rounded-md part-value" placeholder="Counter Name (unique)" value="${escapeHtml(part.key || '')}">
+                            <input type="number" class="w-1/4 p-1 border rounded-md part-start" placeholder="Start" value="${escapeHtml(part.start || 1)}">
+                            <input type="number" class="w-1/4 p-1 border rounded-md part-step" placeholder="Step" value="${escapeHtml(part.step || 1)}">
+                        </div>`;
+                    break;
+            }
+            container.innerHTML = inputHtml;
+
+            if (part.type === 'column' && part.value) {
+                container.querySelector('.part-value').value = part.value;
+            }
+        }
+
+        function handleConcatPartTypeChange(selectElement) {
+            const partDiv = selectElement.closest('.flex');
+            const valueContainer = partDiv.querySelector('.part-value-container');
+            const sourceTable = document.getElementById('transform-source-table').value;
+            const colOptions = mysqlSchemaData[sourceTable]?.columns.map(c => `<option value="${c.name}">${c.name}</option>`).join('') || '';
+            renderConcatPartValueInput(valueContainer, { type: selectElement.value }, colOptions);
+        }
+
+        function addConcatPart() {
+            const parts = readConcatPartsFromUI();
+            parts.push({ type: 'separator', value: ' ' });
+            renderConcatParts(parts);
+        }
+
+        function removeConcatPart(buttonElement) {
+            const partDiv = buttonElement.closest('.flex');
+            const index = parseInt(partDiv.dataset.index, 10);
+            const parts = readConcatPartsFromUI();
+            parts.splice(index, 1);
+            renderConcatParts(parts);
+        }
+
+        function readConcatPartsFromUI() {
+            const parts = [];
+            document.querySelectorAll('#concat-parts-container > div').forEach(partDiv => {
+                const type = partDiv.querySelector('.part-type-select').value;
+                const newPart = { type };
+                if (type === 'column') {
+                    newPart.value = partDiv.querySelector('.part-value').value;
+                } else if (type === 'static' || type === 'separator') {
+                    newPart.value = partDiv.querySelector('.part-value').value;
+                } else if (type === 'auto-increment') {
+                    newPart.key = partDiv.querySelector('.part-value').value;
+                    newPart.start = parseInt(partDiv.querySelector('.part-start').value, 10) || 1;
+                    newPart.step = parseInt(partDiv.querySelector('.part-step').value, 10) || 1;
+                }
+                parts.push(newPart);
+            });
+            return parts;
+        }
+
 
         function renderFallbackOptions(currentFallbackRule = {}) {
             const container = document.getElementById('fallback-options');
@@ -1050,7 +1128,7 @@
                 'teacher': 2,
                 'student': 3
             };
-            return roleMap[roleString.toLowerCase()] || roleString;
+            return roleMap[String(roleString).toLowerCase()] || roleString;
         }
 
         function saveMappingRule(pgTable, pgCol) {
@@ -1070,17 +1148,9 @@
                     const selectedOption = document.getElementById('direct-source-col').selectedOptions[0];
                     newRule.value = selectedOption.value;
                     newRule.source_table = selectedOption.dataset.table;
-                    
-                    if (isRoleIdColumn) {
-                        newRule.transform = 'convertRoleToInt';
-                    }
                 } else if (type === 'static') {
-                    if (isRoleIdColumn) {
-                        const staticValue = document.getElementById('static-value').value;
-                        newRule.value = convertRoleToInt(staticValue);
-                    } else {
-                        newRule.value = document.getElementById('static-value').value;
-                    }
+                    const staticValue = document.getElementById('static-value').value;
+                    newRule.value = isRoleIdColumn ? convertRoleToInt(staticValue) : staticValue;
                 } else if (type === 'auto-increment') {
                     newRule.start = parseInt(document.getElementById('auto-inc-start').value);
                     newRule.step = parseInt(document.getElementById('auto-inc-step').value);
@@ -1088,55 +1158,54 @@
                     newRule.source_table = document.getElementById('transform-source-table').value;
                     newRule.function = document.getElementById('transform-function').value;
                     if (newRule.function === 'CONCAT') {
-                        const columns = Array.from(document.querySelectorAll('.concat-col-select')).map(sel => sel.value);
-                        newRule.params = { columns, separator: document.getElementById('transform-param-separator').value };
+                        newRule.params = { parts: readConcatPartsFromUI() };
                     }
                 } else if (type === 'group_and_aggregate') {
                     newRule.source_table = document.getElementById('aggregate-source-table').value;
                     newRule.group_by_column = document.getElementById('aggregate-group-by-col').value;
                     newRule.aggregate_column = document.getElementById('aggregate-aggregate-col').value;
-                } else if (type === 'lookup') {
-                    newRule.lookup_source_table = document.getElementById('lookup-table').value;
-                    newRule.where_col = document.getElementById('lookup-where-col').value;
+                } else if (type === 'lookup' || type === 'target_lookup' || type === 'basic_target_lookup') {
+                    if (type === 'lookup') newRule.lookup_source_table = document.getElementById('lookup-table').value;
+                    else newRule.lookup_table = document.getElementById('lookup-table').value;
+                    
                     newRule.get_col = document.getElementById('lookup-get-col').value;
                     newRule.match_col = document.getElementById('lookup-match-col').value;
                     newRule.default = document.getElementById('lookup-default-val').value;
-                    
-                    if (isRoleIdColumn && newRule.default) {
-                        newRule.default = convertRoleToInt(newRule.default);
+
+                    if(type !== 'basic_target_lookup') newRule.where_col = document.getElementById('lookup-where-col').value;
+                    else {
+                        newRule.where_clause = document.getElementById('where-clause-input').value;
+                        newRule.order_by_clause = document.getElementById('order-by-clause-input').value;
                     }
-                } else if (type === 'target_lookup') {
-                    newRule.lookup_table = document.getElementById('lookup-table').value;
-                    newRule.where_col = document.getElementById('lookup-where-col').value;
-                    newRule.get_col = document.getElementById('lookup-get-col').value;
-                    newRule.match_col = document.getElementById('lookup-match-col').value;
-                    newRule.default = document.getElementById('lookup-default-val').value;
-                    
-                    if (isRoleIdColumn && newRule.default) {
-                        newRule.default = convertRoleToInt(newRule.default);
-                    }
-                } else if (type === 'basic_target_lookup') {
-                    newRule.lookup_table = document.getElementById('lookup-table').value;
-                    newRule.get_col = document.getElementById('lookup-get-col').value;
-                    newRule.match_col = document.getElementById('lookup-match-col').value;
-                    newRule.where_clause = document.getElementById('where-clause-input').value;
-                    newRule.order_by_clause = document.getElementById('order-by-clause-input').value;
-                    newRule.default = document.getElementById('lookup-default-val').value;
-                    
+
                     if (isRoleIdColumn && newRule.default) {
                         newRule.default = convertRoleToInt(newRule.default);
                     }
                 }
+
+                // --- Save Post-Processing and Fallback Rules ---
+                const postTransform = {};
+                const castTo = document.getElementById('post-transform-cast').value;
+                const dateFrom = document.getElementById('post-transform-date-from').value;
+                const dateTo = document.getElementById('post-transform-date-to').value;
+
+                if (castTo) {
+                    postTransform.cast_to = castTo;
+                }
+                if (dateFrom && dateTo) {
+                    postTransform.date_format = { from: dateFrom, to: dateTo };
+                }
+                if (Object.keys(postTransform).length > 0) {
+                    newRule.post_transform = postTransform;
+                }
+
 
                 if (document.getElementById('fallback-enabled-checkbox').checked && !['static', 'auto-increment'].includes(type)) {
                     const fallbackType = document.getElementById('fallback-type-selector').value;
                     let fallbackRule = { type: fallbackType };
                     if (fallbackType === 'static') {
                         let fallbackValue = document.getElementById('fallback-static-value').value;
-                        if (isRoleIdColumn) {
-                            fallbackValue = convertRoleToInt(fallbackValue);
-                        }
-                        fallbackRule.value = fallbackValue;
+                        fallbackRule.value = isRoleIdColumn ? convertRoleToInt(fallbackValue) : fallbackValue;
                     } else if (fallbackType === 'auto-increment') {
                         fallbackRule.start = parseInt(document.getElementById('fallback-auto-inc-start').value);
                         fallbackRule.step = parseInt(document.getElementById('fallback-auto-inc-step').value);
@@ -1181,10 +1250,10 @@
             html += `<div class="mb-4"><h3 class="font-semibold mb-2">Value Replacements</h3><div class="space-y-3">`;
             mysqlSchemaData[tableName].columns.forEach(col => {
                 html += `<div class="p-2 border-t"><p class="font-medium">${col.name}</p><div id="replacements-for-${col.name}" class="space-y-2 mt-2"></div>`;
-                html += `<button onclick="addReplacementRule('${tableName}', '${col.name}')" class="text-sm text-blue-600 hover:underline mt-2">+ Add Replacement</button></div>`;
+                html += `<button type="button" onclick="addReplacementRule('${tableName}', '${col.name}')" class="text-sm text-blue-600 hover:underline mt-2">+ Add Replacement</button></div>`;
             });
             html += `</div></div>`;
-            html += `<div class="flex justify-end space-x-4 mt-6"><button onclick="closeSettingsModal()" class="px-4 py-2 bg-gray-200 rounded-md">Cancel</button><button onclick="saveSettings('${tableName}')" class="px-4 py-2 bg-blue-600 text-white rounded-md">Save Settings</button></div>`;
+            html += `<div class="flex justify-end space-x-4 mt-6"><button type="button" onclick="closeSettingsModal()" class="px-4 py-2 bg-gray-200 rounded-md">Cancel</button><button type="button" onclick="saveSettings('${tableName}')" class="px-4 py-2 bg-blue-600 text-white rounded-md">Save Settings</button></div>`;
             
             content.innerHTML = html;
             
@@ -1204,7 +1273,7 @@
                 <input type="text" class="w-1/2 p-1 border rounded-md text-sm find-input" placeholder="Find this value" value="${escapeHtml(findVal)}">
                 <span class="font-bold text-gray-500">→</span>
                 <input type="text" class="w-1/2 p-1 border rounded-md text-sm replace-input" placeholder="Replace with this" value="${escapeHtml(replaceVal)}">
-                <button onclick="this.parentElement.remove()" class="text-red-500 hover:text-red-700 font-bold">&times;</button>
+                <button type="button" onclick="this.parentElement.remove()" class="text-red-500 hover:text-red-700 font-bold">&times;</button>
             `;
             container.appendChild(ruleDiv);
         }
@@ -1286,12 +1355,12 @@
                 content.innerHTML = `
                     <div class="flex justify-between items-start">
                         <h2 class="text-2xl font-bold mb-4">Previewing ${tableName}.${columnName}</h2>
-                        <button onclick="closeDataPreviewModal()" class="text-2xl font-bold">&times;</button>
+                        <button type="button" onclick="closeDataPreviewModal()" class="text-2xl font-bold">&times;</button>
                     </div>
                     ${listHtml}
                 `;
             } catch (error) {
-                content.innerHTML = `<p class="text-red-500">Error: ${error.message}</p> <button onclick="closeDataPreviewModal()" class="mt-4 px-4 py-2 bg-gray-200 rounded-md">Close</button>`;
+                content.innerHTML = `<p class="text-red-500">Error: ${error.message}</p> <button type="button" onclick="closeDataPreviewModal()" class="mt-4 px-4 py-2 bg-gray-200 rounded-md">Close</button>`;
             }
         }
 
@@ -1340,12 +1409,12 @@
                 content.innerHTML = `
                     <div class="flex justify-between items-start">
                         <h2 class="text-2xl font-bold mb-4">Full Data for ${tableName}</h2>
-                        <button onclick="closeDataPreviewModal()" class="text-2xl font-bold">&times;</button>
+                        <button type="button" onclick="closeDataPreviewModal()" class="text-2xl font-bold">&times;</button>
                     </div>
                     ${tableHtml}
                 `;
             } catch (error) {
-                 content.innerHTML = `<p class="text-red-500">Error: ${error.message}</p> <button onclick="closeDataPreviewModal()" class="mt-4 px-4 py-2 bg-gray-200 rounded-md">Close</button>`;
+                 content.innerHTML = `<p class="text-red-500">Error: ${error.message}</p> <button type="button" onclick="closeDataPreviewModal()" class="mt-4 px-4 py-2 bg-gray-200 rounded-md">Close</button>`;
             }
         }
 
@@ -1447,99 +1516,6 @@
             } catch (error) {
                 handleFetchError(error, 'loading selected mapping');
             }
-        }
-
-        // --- AI Chat Functions ---
-        let chatHistory = [];
-        const aiSystemPrompt = `You are an expert AI assistant for a MySQL to PostgreSQL database migration tool. Your purpose is to help users understand and use the tool effectively.
-
-Here is a summary of the tool's functionality:
-
-**Overall Goal:** To migrate schema and data from a MySQL \\.sql\\ dump file into a live PostgreSQL database.
-
-**Workflow:**
-1.  **Step 1: Select MySQL Dump File:** The user selects a \\.sql\\ file from the server or provides a full path to it. This file contains the \\CREATE TABLE\\ and \\INSERT INTO\\ statements for the source MySQL database.
-2.  **Step 2: Connect to PostgreSQL:** The user provides connection details for their target PostgreSQL database. The tool then fetches a list of available databases for the user to choose from.
-3.  **Step 3: Map Tables and Columns:** This is the core of the tool.
-    * The UI shows the source MySQL schema on the left and the target PostgreSQL schema on the right.
-    * Users can map data by dragging a source column to a target column for a 'direct' mapping.
-    * For more complex scenarios, users can click on a target column to open a detailed **Mapping Panel**.
-4.  **Mapping Panel Types:**
-    * **Direct Mapping:** A direct 1-to-1 copy from a source column.
-    * **Transformation:** Apply a function. Currently, only \\CONCAT\\ is supported, which joins values from multiple source columns with a separator.
-    * **Group and Aggregate to Array:** This is for one-to-many relationships. It groups rows by a specific column (e.g., \\user_id\\) and collects all values from another column (e.g., \\phone_number\\) into a PostgreSQL array.
-    * **Lookup (Source/Target):** Fetches a value from another table (either in the source dump or the live target DB) based on a matching key. For example, to get a \\user_name\\ from a \\users\\ table by matching the \\user_id\\ from the current row.
-    * **Static Value:** Hardcode a specific value for the target column.
-    * **Auto-Increment:** Generate a sequence of numbers.
-5.  **Table Settings:** By clicking the gear icon on a source table, users can define:
-    * **Filters (WHERE clause):** To only migrate a subset of data from a source table (e.g., \\status = 'active'\\).
-    * **Value Replacements:** To find and replace specific values in a column before migration (e.g., change 'T' to 'true').
-6.  **Custom SQL Commands:** A section where users can write raw SQL to be executed on the target database *before* the main data migration starts (pre-migration) or *after* it finishes (post-migration). This is useful for setting up extensions, creating indexes, or running cleanup scripts.
-7.  **Run Migration:** The final step. The user can choose to \\TRUNCATE\\ (clear) target tables first and then run the migration. The tool processes everything and provides a summary.
-
-When a user asks a question, provide clear, concise, and helpful explanations based on this context. If they ask for an example, provide a realistic one related to database migration.`;
-
-        function toggleAIChat() {
-            document.getElementById('ai-chat-modal').classList.toggle('hidden');
-        }
-
-        async function sendChatMessage() {
-            const input = document.getElementById('ai-chat-input');
-            const message = input.value.trim();
-            if (!message) return;
-
-            addMessageToHistory('user', message);
-            input.value = '';
-
-            const thinkingIndicator = addMessageToHistory('model', 'Thinking...');
-            
-            if (chatHistory.length === 0) {
-                chatHistory.push({ role: "user", parts: [{ text: aiSystemPrompt + "\n\nHere is the user's first question: " + message }] });
-            } else {
-                chatHistory.push({ role: "user", parts: [{ text: message }] });
-            }
-
-            try {
-                const payload = { contents: chatHistory };
-                const apiKey = ""; // Left empty as per instructions
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    const errorResult = await response.json();
-                    throw new Error(errorResult.error?.message || 'Failed to get response from AI.');
-                }
-
-                const result = await response.json();
-                let modelResponse = "Sorry, I couldn't process that. Please try again.";
-                if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts[0]) {
-                    modelResponse = result.candidates[0].content.parts[0].text;
-                }
-                
-                thinkingIndicator.innerHTML = `<p>${modelResponse.replace(/\n/g, '<br>')}</p>`;
-                chatHistory.push({ role: "model", parts: [{ text: modelResponse }] });
-
-            } catch (error) {
-                 thinkingIndicator.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
-            } finally {
-                const chatHistoryEl = document.getElementById('ai-chat-history');
-                chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
-            }
-        }
-
-        function addMessageToHistory(role, text) {
-            const historyEl = document.getElementById('ai-chat-history');
-            const messageEl = document.createElement('div');
-            messageEl.className = `chat-message ${role}`;
-            messageEl.innerHTML = `<p>${text}</p>`;
-            historyEl.appendChild(messageEl);
-            historyEl.scrollTop = historyEl.scrollHeight;
-            return messageEl;
         }
         
         function closeSettingsModal() {
