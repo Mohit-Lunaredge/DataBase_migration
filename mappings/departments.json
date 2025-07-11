@@ -1,0 +1,31 @@
+{
+    "departments": {
+        "user_id": {
+            "type": "target_lookup",
+            "lookup_table": "users",
+            "get_col": "id",
+            "match_col": "email",
+            "default": "",
+            "where_col": "email"
+        },
+        "email": {
+            "type": "direct",
+            "value": "email",
+            "source_table": "user"
+        },
+        "name": {
+            "type": "direct",
+            "value": "user_name",
+            "source_table": "user"
+        },
+        "type": {
+            "type": "static",
+            "value": "Academic"
+        },
+        "slug": {
+            "type": "direct",
+            "value": "dp_name",
+            "source_table": "user"
+        }
+    }
+}

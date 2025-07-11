@@ -67,7 +67,6 @@ def _parse_mysql_insert(statement_chunk):
     A robust parser for MySQL INSERT statements that handles complex string literals.
     It now also handles statements where the column list is omitted.
     """
-    # This regex now makes the column list optional using a non-capturing group (?:...)
     header_match = re.search(
         r"INSERT INTO\s+[`\"]?(\w+)[`\"]?(?:\s*\((.*?)\))?\s+VALUES", 
         statement_chunk, 
@@ -77,7 +76,6 @@ def _parse_mysql_insert(statement_chunk):
         return None, None, None
 
     table_name = header_match.group(1)
-    # The column group (group 2) might be None if it wasn't present in the statement
     columns_str = header_match.group(2)
     columns = [c.strip().strip('`"') for c in columns_str.split(',')] if columns_str else None
     
@@ -159,8 +157,6 @@ def _parse_mysql_insert(statement_chunk):
             else:
                 cleaned_values.append(v_stripped)
         
-        # Only add the row if the number of values matches the number of columns,
-        # or if there are no columns specified (in which case we can't check).
         if columns is None or len(cleaned_values) == len(columns):
             all_rows.append(cleaned_values)
 
@@ -169,23 +165,53 @@ def _parse_mysql_insert(statement_chunk):
     return table_name, columns, all_rows
 
 
-def _check_where_condition(row_dict, where_clause):
-    """Checks if a data row meets the conditions of a user-defined WHERE clause."""
-    if not where_clause:
+def _check_where_condition(row_dict, where_conditions):
+    """
+    Checks if a data row meets the conditions of a user-defined WHERE clause,
+    now with support for advanced pattern matching.
+    """
+    if not where_conditions:
         return True
-    conditions = re.split(r'\s+AND\s+', where_clause, flags=re.IGNORECASE)
-    for condition in conditions:
-        match = re.match(r"(\w+)\s*(!=| =)\s*(.*)", condition.strip())
-        if not match:
+
+    for condition in where_conditions:
+        col = condition.get('column')
+        op = condition.get('op')
+        val = condition.get('value')
+        
+        if not col or not op:
             continue
-        col, op, val = match.groups()
-        val = val.strip().strip("'\"")
-        row_val_str = str(row_dict.get(col)) if row_dict.get(col) is not None else ''
-        if op == '=' and row_val_str != val:
-            return False
-        if op == '!=' and row_val_str == val:
-            return False
-    return True
+
+        row_val = row_dict.get(col)
+        row_val_str = str(row_val) if row_val is not None else ''
+
+        match = False
+        if op == '=':
+            match = (row_val_str == val)
+        elif op == '!=':
+            match = (row_val_str != val)
+        elif op == 'LIKE':
+            # Convert SQL LIKE to regex
+            regex_pattern = val.replace('%', '.*').replace('_', '.')
+            match = bool(re.search(f"^{regex_pattern}$", row_val_str, re.IGNORECASE))
+        elif op == 'NOT LIKE':
+            regex_pattern = val.replace('%', '.*').replace('_', '.')
+            match = not bool(re.search(f"^{regex_pattern}$", row_val_str, re.IGNORECASE))
+        elif op == 'REGEXP':
+            try:
+                match = bool(re.search(val, row_val_str))
+            except re.error:
+                # Invalid regex pattern, treat as no match
+                match = False
+        elif op == 'NOT REGEXP':
+            try:
+                match = not bool(re.search(val, row_val_str))
+            except re.error:
+                match = True # Invalid regex pattern means it can't match, so "not regexp" is true
+
+        if not match:
+            return False # If any condition fails, the whole clause fails
+
+    return True # All conditions passed
 
 def _apply_replacements(value, rules):
     """Applies find-and-replace rules to a single value."""
@@ -875,18 +901,15 @@ def get_source_table_data():
         
         parsed_table, parsed_cols, all_rows = _parse_mysql_insert(full_stmt)
         
-        # Ensure we are only processing the table we asked for
         if parsed_table != table_name_to_find:
             content_cursor = stmt_end
             continue
         
         current_headers = parsed_cols
-        # If columns were not in the INSERT statement, get them from the schema
         if current_headers is None:
             if parsed_table in file_schema:
                 current_headers = [c['name'] for c in file_schema[parsed_table]['columns']]
             else:
-                # Cannot proceed without headers
                 content_cursor = stmt_end
                 continue
 
