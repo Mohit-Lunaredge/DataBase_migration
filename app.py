@@ -4,6 +4,9 @@ import json
 import sys
 import os
 import datetime
+import io
+import traceback
+from contextlib import redirect_stdout
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from collections import defaultdict
@@ -35,7 +38,8 @@ def _get_schema_from_sql_file(filepath):
     except FileNotFoundError:
         raise 
 
-    create_table_regex = re.compile(r"CREATE TABLE `([^`]+)` \(([\s\S]+?)\);", re.IGNORECASE)
+    create_table_regex = re.compile(r"CREATE TABLE(?: IF NOT EXISTS)?\s+`([^`]+)`\s+\(([\s\S]+?)\);", re.IGNORECASE)
+    
     for match in create_table_regex.finditer(content):
         table_name = match.group(1)
         columns = []
@@ -56,270 +60,114 @@ def _get_schema_from_sql_file(filepath):
             
     return tables
 
-# --- API Endpoints ---
-
-@app.route('/api/list_sql_files', methods=['GET'])
-def list_sql_files():
-    """Lists all .sql files in the predefined SQL_FILES_DIR."""
-    _initialize_directories()
-    try:
-        files = [f for f in os.listdir(SQL_FILES_DIR) if f.endswith('.sql')]
-        return jsonify(sorted(files))
-    except Exception as e:
-        return jsonify({"error": f"Failed to list SQL files: {str(e)}"}), 500
-
-@app.route('/api/parse_sql_file', methods=['POST'])
-def parse_sql_file_endpoint():
-    """Parses a given SQL file from the server and returns its schema."""
-    data = request.json
-    filename = data.get('filename')
-    custom_path = data.get('path')
-    filepath = custom_path if custom_path else os.path.join(SQL_FILES_DIR, filename)
-    if not filepath: return jsonify({"error": "File path is required."}), 400
-    try:
-        schema = _get_schema_from_sql_file(filepath)
-        return jsonify(schema)
-    except FileNotFoundError:
-        return jsonify({"error": f"File not found on server at path: {filepath}"}), 404
-    except Exception as e:
-        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
-
-@app.route('/api/get_databases', methods=['POST'])
-def get_databases():
-    """Connects to PostgreSQL and fetches a list of all non-template databases."""
-    creds = request.json
-    try:
-        conn = psycopg2.connect(dbname="postgres", user=creds.get('user'), password=creds.get('password'), host=creds.get('host'), port=creds.get('port'))
-        conn.autocommit = True
-        cursor = conn.cursor()
-        cursor.execute("SELECT datname FROM pg_database WHERE datistemplate = false;")
-        databases = [row[0] for row in cursor.fetchall()]
-        cursor.close()
-        conn.close()
-        return jsonify(databases)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-@app.route('/api/get_tables', methods=['POST'])
-def get_tables():
-    """Fetches the schema (tables and columns) for a specific PostgreSQL database."""
-    data = request.json
-    creds = data.get('creds')
-    dbname = data.get('dbname')
-    try:
-        conn = psycopg2.connect(dbname=dbname, user=creds.get('user'), password=creds.get('password'), host=creds.get('host'), port=creds.get('port'))
-        cursor = conn.cursor()
-        query = "SELECT table_name, column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = 'public' ORDER BY table_name, ordinal_position;"
-        cursor.execute(query)
-        tables = defaultdict(lambda: {'columns': []})
-        for row in cursor.fetchall():
-            table_name, column_name, data_type, is_nullable = row
-            tables[table_name]['columns'].append({"name": column_name, "type": data_type, "is_nullable": is_nullable})
-        cursor.close()
-        conn.close()
-        return jsonify(dict(tables))
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-@app.route('/api/run_migration', methods=['POST'])
-def run_migration():
-    """The main endpoint to trigger the data migration process based on user configuration."""
-    config = request.json
-    file_path_from_client = config.get('mysql_dump_file_path')
-    if not os.path.isabs(file_path_from_client):
-        full_file_path = os.path.join(SQL_FILES_DIR, file_path_from_client)
-    else:
-        full_file_path = file_path_from_client
-    config['mysql_dump_file_path'] = full_file_path
-    try:
-        results = _perform_migration(config)
-        return jsonify({"message": "Migration processing complete!", "summary": results})
-    except FileNotFoundError:
-        return jsonify({"error": f"The MySQL dump file was not found on the server at path: {config.get('mysql_dump_file_path')}"}), 404
-    except Exception as e:
-        print(f"A critical error occurred: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": f"A critical error occurred during migration: {str(e)}"}), 500
-
-@app.route('/api/get_column_data', methods=['POST'])
-def get_column_data():
-    """
-    Parses a specific table from a MySQL dump file to extract all unique values
-    from a given column. This is used for data preview in the UI.
-    """
-    data = request.json
-    filename = data.get('filename')
-    custom_path = data.get('path')
-    table_name_to_find = data.get('tableName')
-    column_name_to_find = data.get('columnName')
-
-    if not (filename or custom_path) or not table_name_to_find or not column_name_to_find:
-        return jsonify({"error": "File path, table name, and column name are required."}), 400
-
-    filepath = custom_path if custom_path else os.path.join(SQL_FILES_DIR, filename)
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            full_content = f.read()
-    except FileNotFoundError:
-        return jsonify({"error": f"File not found on server at path: {filepath}"}), 404
-    except Exception as e:
-        return jsonify({"error": f"An error occurred while reading the file: {str(e)}"}), 500
-
-    unique_values = set()
-    total_rows = 0
-    
-    insert_statement_regex = re.compile(
-        r"INSERT INTO\s+[`\"]?{}[`\"]?.*?;".format(re.escape(table_name_to_find)),
-        re.IGNORECASE | re.DOTALL
-    )
-
-    for statement_match in insert_statement_regex.finditer(full_content):
-        _, mysql_cols, all_rows = _parse_mysql_insert(statement_match.group(0))
-        if not mysql_cols:
-            continue
-        try:
-            col_index = mysql_cols.index(column_name_to_find)
-            for row in all_rows:
-                total_rows += 1
-                if col_index < len(row):
-                    unique_values.add(row[col_index])
-        except (ValueError, IndexError):
-            continue
-            
-    return jsonify({
-        "unique_values": sorted(list(v for v in unique_values if v is not None)),
-        "total_rows": total_rows
-    })
-
-@app.route('/api/get_source_table_data', methods=['POST'])
-def get_source_table_data():
-    """Parses a MySQL dump to extract all data for a specific table."""
-    data = request.json
-    filename = data.get('filename')
-    custom_path = data.get('path')
-    table_name_to_find = data.get('tableName')
-
-    if not (filename or custom_path) or not table_name_to_find:
-        return jsonify({"error": "File path and table name are required."}), 400
-
-    filepath = custom_path if custom_path else os.path.join(SQL_FILES_DIR, filename)
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            full_content = f.read()
-    except FileNotFoundError:
-        return jsonify({"error": f"File not found on server at path: {filepath}"}), 404
-    except Exception as e:
-        return jsonify({"error": f"An error occurred while reading the file: {str(e)}"}), 500
-
-    table_data = []
-    headers = []
-    insert_statement_regex = re.compile(
-        r"INSERT INTO\s+[`\"]?{}[`\"]?.*?;".format(re.escape(table_name_to_find)),
-        re.IGNORECASE | re.DOTALL
-    )
-    for statement_match in insert_statement_regex.finditer(full_content):
-        _, mysql_cols, all_rows = _parse_mysql_insert(statement_match.group(0))
-        if not headers and mysql_cols:
-            headers = mysql_cols
-        if mysql_cols and all_rows:
-            for row in all_rows:
-                table_data.append(dict(zip(mysql_cols, row)))
-
-    return jsonify({"headers": headers, "rows": table_data})
-
-# --- Mapping & Log Endpoints ---
-
-@app.route('/api/save_mapping', methods=['POST'])
-def save_mapping():
-    """Saves the current mapping configuration to a JSON file."""
-    data = request.json
-    name = data.get('name')
-    config = data.get('config')
-    if not name or not config:
-        return jsonify({"error": "Mapping name and config are required."}), 400
-    
-    try:
-        _initialize_directories()
-        safe_name = "".join([c for c in name if c.isalpha() or c.isdigit() or c in (' ', '_', '-')]).rstrip()
-        if not safe_name:
-            return jsonify({"error": "Invalid mapping name."}), 400
-        
-        filepath = os.path.join(MAPPINGS_DIR, f"{safe_name}.json")
-        with open(filepath, 'w') as f:
-            json.dump(config, f, indent=4)
-        return jsonify({"message": f"Mapping '{safe_name}' saved successfully."})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/get_mappings', methods=['GET'])
-def get_mappings():
-    """Lists all saved mapping configuration files."""
-    _initialize_directories()
-    try:
-        files = [f.replace('.json', '') for f in os.listdir(MAPPINGS_DIR) if f.endswith('.json')]
-        return jsonify(sorted(files))
-    except Exception as e:
-        return jsonify({"error": f"Failed to list mappings: {str(e)}"}), 500
-
-@app.route('/api/load_mapping/<name>', methods=['GET'])
-def load_mapping(name):
-    """Loads a specific mapping configuration file."""
-    try:
-        filepath = os.path.join(MAPPINGS_DIR, f"{name}.json")
-        if os.path.exists(filepath):
-            with open(filepath, 'r') as f:
-                config = json.load(f)
-            return jsonify(config)
-        else:
-            return jsonify({"error": "Mapping not found"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/get_migration_logs', methods=['GET'])
-def get_migration_logs():
-    """Lists all saved migration log files."""
-    _initialize_directories()
-    try:
-        files = [f for f in os.listdir(LOGS_DIR) if f.endswith('.json')]
-        return jsonify(sorted(files, reverse=True))
-    except Exception as e:
-        return jsonify({"error": f"Failed to list log files: {str(e)}"}), 500
-
 # --- Core Migration Logic ---
 
 def _parse_mysql_insert(statement_chunk):
-    """Parses a MySQL INSERT statement into its table name, column list, and row data."""
-    header_match = re.search(r"INSERT INTO\s+[`\"]?(\w+)[`\"]?\s*\((.*?)\)\s+VALUES", statement_chunk, re.IGNORECASE | re.DOTALL)
+    """
+    A robust parser for MySQL INSERT statements that handles complex string literals.
+    It now also handles statements where the column list is omitted.
+    """
+    # This regex now makes the column list optional using a non-capturing group (?:...)
+    header_match = re.search(
+        r"INSERT INTO\s+[`\"]?(\w+)[`\"]?(?:\s*\((.*?)\))?\s+VALUES", 
+        statement_chunk, 
+        re.IGNORECASE | re.DOTALL
+    )
     if not header_match:
         return None, None, None
-    
+
     table_name = header_match.group(1)
-    columns = [c.strip().strip('`"') for c in header_match.group(2).split(',')]
+    # The column group (group 2) might be None if it wasn't present in the statement
+    columns_str = header_match.group(2)
+    columns = [c.strip().strip('`"') for c in columns_str.split(',')] if columns_str else None
     
-    values_keyword_match = re.search(r"VALUES", statement_chunk, re.IGNORECASE)
-    if not values_keyword_match:
+    try:
+        values_keyword_pos = re.search(r"VALUES\s*", statement_chunk, re.IGNORECASE).end()
+    except AttributeError:
         return table_name, columns, []
 
-    values_full_str = statement_chunk[values_keyword_match.end():]
-    value_tuples_regex = re.compile(r"\(( (?: [^()'] | ' (?: \\. | [^'\\] )* ' )*? )\)", re.VERBOSE)
-    value_matches = value_tuples_regex.findall(values_full_str)
-    
+    cursor = values_keyword_pos
     all_rows = []
-    for v_tuple in value_matches:
-        values = re.split(r",(?=(?:[^']*'[^']*')*[^']*$)", v_tuple)
+    
+    while cursor < len(statement_chunk):
+        try:
+            start_paren_idx = statement_chunk.index('(', cursor)
+            cursor = start_paren_idx + 1
+        except ValueError:
+            break
+
+        paren_level = 1
+        in_string = False
+        is_escaped = False
+        row_str_start = cursor
+        end_paren_idx = -1
+
+        while cursor < len(statement_chunk):
+            char = statement_chunk[cursor]
+            if is_escaped:
+                is_escaped = False
+            elif char == '\\':
+                is_escaped = True
+            elif char == "'":
+                in_string = not in_string
+            elif not in_string:
+                if char == '(':
+                    paren_level += 1
+                elif char == ')':
+                    paren_level -= 1
+                    if paren_level == 0:
+                        end_paren_idx = cursor
+                        break
+            cursor += 1
+        
+        if end_paren_idx == -1:
+            break
+            
+        row_content_str = statement_chunk[row_str_start:end_paren_idx]
+        
+        row_values = []
+        current_value = ""
+        in_string_inner = False
+        is_escaped_inner = False
+        
+        for char in row_content_str:
+            if is_escaped_inner:
+                current_value += char
+                is_escaped_inner = False
+            elif char == '\\':
+                current_value += char
+                is_escaped_inner = True
+            elif char == "'":
+                in_string_inner = not in_string_inner
+                current_value += char
+            elif not in_string_inner and char == ',':
+                row_values.append(current_value)
+                current_value = ""
+            else:
+                current_value += char
+        row_values.append(current_value)
+
         cleaned_values = []
-        for v in values:
+        for v in row_values:
             v_stripped = v.strip()
             if v_stripped.upper() == 'NULL':
                 cleaned_values.append(None)
             elif v_stripped.startswith("'") and v_stripped.endswith("'"):
-                cleaned_values.append(v_stripped[1:-1].replace("\\'", "'").replace('\\"', '"').replace('\\\\', '\\'))
+                val_content = v_stripped[1:-1]
+                val_unescaped = val_content.replace("\\'", "'").replace('\\"', '"').replace('\\\\', '\\')
+                cleaned_values.append(val_unescaped)
             else:
                 cleaned_values.append(v_stripped)
-        all_rows.append(cleaned_values)
         
+        # Only add the row if the number of values matches the number of columns,
+        # or if there are no columns specified (in which case we can't check).
+        if columns is None or len(cleaned_values) == len(columns):
+            all_rows.append(cleaned_values)
+
+        cursor = end_paren_idx + 1
+
     return table_name, columns, all_rows
+
 
 def _check_where_condition(row_dict, where_clause):
     """Checks if a data row meets the conditions of a user-defined WHERE clause."""
@@ -404,7 +252,6 @@ def _apply_transformation(source_row, rule, counters, pg_table, pg_col):
             elif part_type in ['static', 'separator']:
                 final_parts.append(str(part.get('value', '')))
             elif part_type == 'auto-increment':
-                # Create a unique key for the counter for this specific transformation
                 counter_key = f"{pg_table}.{pg_col}.concat.{part.get('key', 'default_key')}"
                 if counter_key not in counters:
                     counters[counter_key] = part.get('start', 1)
@@ -427,19 +274,14 @@ def _apply_post_transformations(value, rule):
 
     transformed_value = value
 
-    # 1. Date Formatting
     date_format_rule = post_transform_rule.get('date_format')
     if date_format_rule and date_format_rule.get('from') and date_format_rule.get('to'):
         try:
-            # First, try to parse the date from the given format
             date_obj = datetime.datetime.strptime(str(transformed_value), date_format_rule['from'])
-            # Then, format it to the new format
             transformed_value = date_obj.strftime(date_format_rule['to'])
         except (ValueError, TypeError):
-            # If parsing fails, just keep the original value and proceed
             pass
 
-    # 2. Type Casting
     cast_to_type = post_transform_rule.get('cast_to')
     if cast_to_type:
         try:
@@ -450,13 +292,11 @@ def _apply_post_transformations(value, rule):
             elif cast_to_type == 'string':
                 transformed_value = str(transformed_value)
             elif cast_to_type == 'boolean':
-                # Handle common boolean string representations
                 if str(transformed_value).lower() in ['true', 't', '1', 'yes', 'y']:
                     transformed_value = True
                 else:
                     transformed_value = False
         except (ValueError, TypeError):
-            # If casting fails, return the value as it was before casting
             pass
             
     return transformed_value
@@ -503,7 +343,6 @@ def _execute_custom_commands(cursor, commands_str, summary, command_type):
             error_str = str(getattr(e, 'pgerror', str(e))).strip()
             summary[summary_key]['errors'].append({'command': cmd, 'error': error_str})
             print(f" -> Error executing command '{cmd}': {error_str}")
-            # Stop execution of further commands in this block if one fails
             raise e
 
 def _perform_migration(config):
@@ -720,10 +559,8 @@ def _perform_migration(config):
                     except Exception as e:
                         print(f"Error processing rule for {pg_table}.{pg_col}: {e}")
                     
-                    # Apply post-processing transformations
                     processed_value = _apply_post_transformations(value_found, rule)
                     
-                    # Apply fallbacks if the processed value is null/empty
                     final_value = _apply_fallback_rules(processed_value, rule, counters, pg_table, pg_col)
                     
                     pg_values_dict[pg_col] = final_value
@@ -792,6 +629,334 @@ def _perform_migration(config):
         print(f"Error saving migration log: {e}", file=sys.stderr)
 
     return dict(migration_summary)
+
+
+# --- API Endpoints ---
+@app.route('/api/list_sql_files', methods=['GET'])
+def list_sql_files():
+    _initialize_directories()
+    try:
+        files = [f for f in os.listdir(SQL_FILES_DIR) if f.endswith('.sql')]
+        return jsonify(sorted(files))
+    except Exception as e:
+        return jsonify({"error": f"Failed to list SQL files: {str(e)}"}), 500
+
+@app.route('/api/parse_sql_file', methods=['POST'])
+def parse_sql_file_endpoint():
+    data = request.json
+    filename = data.get('filename')
+    custom_path = data.get('path')
+    filepath = custom_path if custom_path else os.path.join(SQL_FILES_DIR, filename)
+    if not filepath: return jsonify({"error": "File path is required."}), 400
+    try:
+        schema = _get_schema_from_sql_file(filepath)
+        if not schema:
+             return jsonify({"error": "Could not find any table definitions in the SQL file. Please check the file content and format."}), 404
+        return jsonify(schema)
+    except FileNotFoundError:
+        return jsonify({"error": f"File not found on server at path: {filepath}"}), 404
+    except Exception as e:
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
+@app.route('/api/get_databases', methods=['POST'])
+def get_databases():
+    creds = request.json
+    try:
+        conn = psycopg2.connect(dbname="postgres", user=creds.get('user'), password=creds.get('password'), host=creds.get('host'), port=creds.get('port'))
+        conn.autocommit = True
+        cursor = conn.cursor()
+        cursor.execute("SELECT datname FROM pg_database WHERE datistemplate = false;")
+        databases = [row[0] for row in cursor.fetchall()]
+        cursor.close()
+        conn.close()
+        return jsonify(databases)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/get_tables', methods=['POST'])
+def get_tables():
+    data = request.json
+    creds = data.get('creds')
+    dbname = data.get('dbname')
+    try:
+        conn = psycopg2.connect(dbname=dbname, user=creds.get('user'), password=creds.get('password'), host=creds.get('host'), port=creds.get('port'))
+        cursor = conn.cursor()
+        query = "SELECT table_name, column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = 'public' ORDER BY table_name, ordinal_position;"
+        cursor.execute(query)
+        tables = defaultdict(lambda: {'columns': []})
+        for row in cursor.fetchall():
+            table_name, column_name, data_type, is_nullable = row
+            tables[table_name]['columns'].append({"name": column_name, "type": data_type, "is_nullable": is_nullable})
+        cursor.close()
+        conn.close()
+        return jsonify(dict(tables))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/run_migration', methods=['POST'])
+def run_migration():
+    config = request.json
+    file_path_from_client = config.get('mysql_dump_file_path')
+    if not os.path.isabs(file_path_from_client):
+        full_file_path = os.path.join(SQL_FILES_DIR, file_path_from_client)
+    else:
+        full_file_path = file_path_from_client
+    config['mysql_dump_file_path'] = full_file_path
+    
+    log_stream = io.StringIO()
+    try:
+        with redirect_stdout(log_stream):
+            results = _perform_migration(config)
+        logs = log_stream.getvalue()
+        return jsonify({"message": "Migration processing complete!", "summary": results, "logs": logs})
+    except FileNotFoundError:
+        return jsonify({"error": f"The MySQL dump file was not found on the server at path: {config.get('mysql_dump_file_path')}"}), 404
+    except Exception as e:
+        traceback.print_exc()
+        logs = log_stream.getvalue()
+        logs += "\n--- CRITICAL ERROR ---\n"
+        logs += traceback.format_exc()
+        return jsonify({"error": f"A critical error occurred during migration: {str(e)}", "logs": logs}), 500
+
+
+@app.route('/api/get_column_data', methods=['POST'])
+def get_column_data():
+    data = request.json
+    filename = data.get('filename')
+    custom_path = data.get('path')
+    table_name_to_find = data.get('tableName')
+    column_name_to_find = data.get('columnName')
+
+    if not (filename or custom_path) or not table_name_to_find or not column_name_to_find:
+        return jsonify({"error": "File path, table name, and column name are required."}), 400
+
+    filepath = custom_path if custom_path else os.path.join(SQL_FILES_DIR, filename)
+    
+    try:
+        file_schema = _get_schema_from_sql_file(filepath)
+        with open(filepath, 'r', encoding='utf-8') as f:
+            full_content = f.read()
+    except FileNotFoundError:
+        return jsonify({"error": f"File not found on server at path: {filepath}"}), 404
+    except Exception as e:
+        return jsonify({"error": f"An error occurred while reading the file: {str(e)}"}), 500
+
+    unique_values = set()
+    total_rows = 0
+    
+    insert_finder_regex = re.compile(
+        r"INSERT INTO\s+[`\"]?{}[`\"]?".format(re.escape(table_name_to_find)),
+        re.IGNORECASE
+    )
+
+    content_cursor = 0
+    while content_cursor < len(full_content):
+        match = insert_finder_regex.search(full_content, content_cursor)
+        if not match:
+            break
+
+        stmt_start = match.start()
+        
+        cursor = stmt_start
+        in_string = False
+        is_escaped = False
+        stmt_end = -1
+        
+        while cursor < len(full_content):
+            char = full_content[cursor]
+            if is_escaped:
+                is_escaped = False
+            elif char == '\\':
+                is_escaped = True
+            elif char == "'":
+                in_string = not in_string
+            elif not in_string and char == ';':
+                stmt_end = cursor + 1
+                break
+            cursor += 1
+            
+        if stmt_end == -1:
+            content_cursor = len(full_content)
+            continue
+
+        full_stmt = full_content[stmt_start:stmt_end]
+        
+        parsed_table, parsed_cols, all_rows = _parse_mysql_insert(full_stmt)
+        
+        if parsed_table != table_name_to_find:
+            content_cursor = stmt_end
+            continue
+
+        current_headers = parsed_cols
+        if current_headers is None:
+            if parsed_table in file_schema:
+                current_headers = [c['name'] for c in file_schema[parsed_table]['columns']]
+            else:
+                content_cursor = stmt_end
+                continue
+        
+        try:
+            col_index = current_headers.index(column_name_to_find)
+            for row in all_rows:
+                total_rows += 1
+                if col_index < len(row):
+                    unique_values.add(row[col_index])
+        except (ValueError, IndexError):
+            pass 
+        
+        content_cursor = stmt_end
+            
+    return jsonify({
+        "unique_values": sorted(list(v for v in unique_values if v is not None)),
+        "total_rows": total_rows
+    })
+
+@app.route('/api/get_source_table_data', methods=['POST'])
+def get_source_table_data():
+    data = request.json
+    filename = data.get('filename')
+    custom_path = data.get('path')
+    table_name_to_find = data.get('tableName')
+
+    if not (filename or custom_path) or not table_name_to_find:
+        return jsonify({"error": "File path and table name are required."}), 400
+
+    filepath = custom_path if custom_path else os.path.join(SQL_FILES_DIR, filename)
+    try:
+        # Pre-parse the schema to handle INSERTs without explicit columns
+        file_schema = _get_schema_from_sql_file(filepath)
+        with open(filepath, 'r', encoding='utf-8') as f:
+            full_content = f.read()
+    except FileNotFoundError:
+        return jsonify({"error": f"File not found on server at path: {filepath}"}), 404
+    except Exception as e:
+        return jsonify({"error": f"An error occurred while reading the file: {str(e)}"}), 500
+
+    table_data = []
+    headers = []
+    
+    insert_finder_regex = re.compile(
+        r"INSERT INTO\s+[`\"]?{}[`\"]?".format(re.escape(table_name_to_find)),
+        re.IGNORECASE
+    )
+
+    content_cursor = 0
+    print(f"--- Searching for table: {table_name_to_find} ---")
+    while content_cursor < len(full_content):
+        match = insert_finder_regex.search(full_content, content_cursor)
+        if not match:
+            break
+
+        stmt_start = match.start()
+        
+        cursor = stmt_start
+        in_string = False
+        is_escaped = False
+        stmt_end = -1
+        
+        while cursor < len(full_content):
+            char = full_content[cursor]
+            if is_escaped:
+                is_escaped = False
+            elif char == '\\':
+                is_escaped = True
+            elif char == "'":
+                in_string = not in_string
+            elif not in_string and char == ';':
+                stmt_end = cursor + 1
+                break
+            cursor += 1
+            
+        if stmt_end == -1:
+            content_cursor = len(full_content)
+            continue
+
+        full_stmt = full_content[stmt_start:stmt_end]
+        
+        parsed_table, parsed_cols, all_rows = _parse_mysql_insert(full_stmt)
+        
+        # Ensure we are only processing the table we asked for
+        if parsed_table != table_name_to_find:
+            content_cursor = stmt_end
+            continue
+        
+        current_headers = parsed_cols
+        # If columns were not in the INSERT statement, get them from the schema
+        if current_headers is None:
+            if parsed_table in file_schema:
+                current_headers = [c['name'] for c in file_schema[parsed_table]['columns']]
+            else:
+                # Cannot proceed without headers
+                content_cursor = stmt_end
+                continue
+
+        if not headers:
+            headers = current_headers
+        
+        if all_rows:
+            for row in all_rows:
+                if len(row) == len(headers):
+                    table_data.append(dict(zip(headers, row)))
+
+        content_cursor = stmt_end
+
+    print(f"--- Found {len(table_data)} rows for table {table_name_to_find} ---")
+    return jsonify({"headers": headers, "rows": table_data})
+
+# --- Mapping & Log Endpoints ---
+
+@app.route('/api/save_mapping', methods=['POST'])
+def save_mapping():
+    data = request.json
+    name = data.get('name')
+    config = data.get('config')
+    if not name or not config:
+        return jsonify({"error": "Mapping name and config are required."}), 400
+    
+    try:
+        _initialize_directories()
+        safe_name = "".join([c for c in name if c.isalpha() or c.isdigit() or c in (' ', '_', '-')]).rstrip()
+        if not safe_name:
+            return jsonify({"error": "Invalid mapping name."}), 400
+        
+        filepath = os.path.join(MAPPINGS_DIR, f"{safe_name}.json")
+        with open(filepath, 'w') as f:
+            json.dump(config, f, indent=4)
+        return jsonify({"message": f"Mapping '{safe_name}' saved successfully."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/get_mappings', methods=['GET'])
+def get_mappings():
+    _initialize_directories()
+    try:
+        files = [f.replace('.json', '') for f in os.listdir(MAPPINGS_DIR) if f.endswith('.json')]
+        return jsonify(sorted(files))
+    except Exception as e:
+        return jsonify({"error": f"Failed to list mappings: {str(e)}"}), 500
+
+@app.route('/api/load_mapping/<name>', methods=['GET'])
+def load_mapping(name):
+    try:
+        filepath = os.path.join(MAPPINGS_DIR, f"{name}.json")
+        if os.path.exists(filepath):
+            with open(filepath, 'r') as f:
+                config = json.load(f)
+            return jsonify(config)
+        else:
+            return jsonify({"error": "Mapping not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/get_migration_logs', methods=['GET'])
+def get_migration_logs():
+    _initialize_directories()
+    try:
+        files = [f for f in os.listdir(LOGS_DIR) if f.endswith('.json')]
+        return jsonify(sorted(files, reverse=True))
+    except Exception as e:
+        return jsonify({"error": f"Failed to list log files: {str(e)}"}), 500
+
 
 if __name__ == '__main__':
     _initialize_directories()

@@ -1,0 +1,46 @@
+{
+    "Faculty_Recongnizationsandcertifications": {
+        "description": {
+            "type": "transformation",
+            "source_table": "certificates",
+            "function": "CONCAT",
+            "params": {
+                "parts": [
+                    {
+                        "type": "separator",
+                        "value": "{"
+                    },
+                    {
+                        "type": "column",
+                        "value": "certificate_name"
+                    },
+                    {
+                        "type": "separator",
+                        "value": ", "
+                    },
+                    {
+                        "type": "column",
+                        "value": "details"
+                    },
+                    {
+                        "type": "separator",
+                        "value": " , "
+                    },
+                    {
+                        "type": "column",
+                        "value": "certificate_year"
+                    },
+                    {
+                        "type": "separator",
+                        "value": " }"
+                    }
+                ]
+            }
+        },
+        "user_id": {
+            "type": "direct",
+            "value": "teacher_id",
+            "source_table": "certificates"
+        }
+    }
+}

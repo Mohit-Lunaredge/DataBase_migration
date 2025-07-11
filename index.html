@@ -389,7 +389,7 @@
         }
 
         function escapeHtml(unsafe) {
-            if (typeof unsafe !== 'string') return unsafe === null || unsafe === undefined ? '' : unsafe;
+            if (typeof unsafe !== 'string') return unsafe === null || unsafe === undefined ? '' : String(unsafe);
             return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
 
@@ -900,7 +900,7 @@
                 });
 
                 if (type === 'basic_target_lookup') {
-                        html = `
+                         html = `
                             <p class="text-sm font-bold text-gray-700">This performs a direct query on the target DB for each row. Use with caution.</p>
                             ${createSelect('lookup-table', 'Lookup From PG Table', lookupTableOptions)}
                             ${createSelect('lookup-get-col', 'Get this column', '')}
