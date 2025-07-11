@@ -7,10 +7,56 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f3f4f6;
+        }
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: box-shadow 0.3s ease-in-out;
+        }
+        .card:hover {
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        .card-header {
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 1.5rem;
+        }
+        .btn {
+            padding: 0.625rem 1.25rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: all 0.2s ease-in-out;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-primary {
+            background-color: #4f46e5;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca;
+        }
+        .btn-secondary {
+            background-color: #10b981;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #059669;
+        }
+        .btn-tertiary {
+             background-color: #6b7280;
+             color: white;
+        }
+        .btn-tertiary:hover {
+            background-color: #4b5563;
+        }
         .column-item:hover { background-color: #f0f4f8; }
-        .drop-zone { border: 2px dashed #cbd5e1; }
-        .drop-zone.drag-over { background-color: #e2e8f0; border-color: #4a5568; }
         .mapped { background-color: #c6f6d5 !important; border-color: #38a169 !important; font-weight: 600; }
         .mapped-target { background-color: #e6fffa !important; border-color: #38b2ac !important; }
         .mapped-line { stroke: #4a5568; stroke-width: 2; marker-end: url(#arrow); }
@@ -20,8 +66,10 @@
         .table-filter-panel-content { max-height: 200px; overflow-y: auto; }
         .error-details { background-color: #2d3748; color: #e2e8f0; padding: 0.75rem; margin-top: 0.5rem; border-radius: 0.25rem; font-family: 'Courier New', Courier, monospace; font-size: 0.8rem; white-space: pre-wrap; word-break: break-all; }
         .data-type { font-size: 0.75rem; color: #718096; margin-left: 0.5rem; }
-        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 50; }
-        .modal-content { background: white; padding: 2rem; border-radius: 0.5rem; width: 90vw; max-width: 800px; max-height: 90vh; overflow-y: auto; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 50; opacity: 0; transition: opacity 0.3s ease-in-out; pointer-events: none;}
+        .modal-overlay.visible { opacity: 1; pointer-events: auto; }
+        .modal-content { background: white; padding: 2rem; border-radius: 0.5rem; width: 90vw; max-width: 800px; max-height: 90vh; overflow-y: auto; transform: scale(0.95); transition: transform 0.3s ease-in-out;}
+        .modal-overlay.visible .modal-content { transform: scale(1); }
         .mapping-info-badge { font-size: 0.65rem; font-weight: bold; color: #2c5282; background-color: #bee3f8; padding: 2px 4px; border-radius: 4px; margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; display: inline-block; vertical-align: middle;}
         .not-null-badge { font-size: 0.65rem; font-weight: bold; color: #c53030; background-color: #fed7d7; padding: 2px 4px; border-radius: 4px; margin-left: 0.5rem; }
         .data-preview-list { max-height: 400px; overflow-y: auto; }
@@ -29,140 +77,289 @@
         .data-preview-table th, .data-preview-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         .data-preview-table th { background-color: #f2f2f2; }
         .hidden { display: none !important; }
+
+        /* AI Assistant Styles */
+        #ai-assistant-button {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background-color: #4f46e5;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s ease-in-out;
+        }
+        #ai-assistant-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        }
+        #ai-chat-modal-overlay {
+             z-index: 999;
+        }
+        #ai-chat-modal {
+            width: 90vw;
+            max-width: 700px;
+            height: 80vh;
+            max-height: 700px;
+            background: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        #ai-chat-header {
+            padding: 1rem;
+            background: linear-gradient(to right, #4f46e5, #6366f1);
+            color: white;
+            font-weight: bold;
+            border-top-left-radius: 0.75rem;
+            border-top-right-radius: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #ai-chat-history {
+            flex-grow: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            background-color: #f9fafb;
+        }
+        .chat-message {
+            margin-bottom: 1rem;
+            max-width: 90%;
+            display: flex;
+            flex-direction: column;
+        }
+        .user-message {
+            background-color: #dbeafe;
+            color: #1e40af;
+            padding: 0.75rem 1rem;
+            border-radius: 1rem 1rem 0.25rem 1rem;
+            align-self: flex-end;
+        }
+        .ai-message {
+            background-color: #e5e7eb;
+            color: #1f2937;
+            padding: 0.75rem 1rem;
+            border-radius: 1rem 1rem 1rem 0.25rem;
+            align-self: flex-start;
+        }
+        .ai-message h1, .ai-message h2, .ai-message h3 { font-weight: bold; margin-top: 0.5em; margin-bottom: 0.25em; }
+        .ai-message h1 { font-size: 1.25rem; }
+        .ai-message h2 { font-size: 1.1rem; }
+        .ai-message h3 { font-size: 1rem; }
+        .ai-message strong { font-weight: bold; }
+        .ai-message em { font-style: italic; }
+        .ai-message ul { list-style-type: disc; margin-left: 1.5rem; }
+        .ai-message ol { list-style-type: decimal; margin-left: 1.5rem; }
+        .ai-message code { background-color: #d1d5db; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-family: monospace; }
+        .ai-message pre { background-color: #111827; color: #e5e7eb; padding: 0.5rem; border-radius: 0.25rem; overflow-x: auto; font-family: monospace; }
+        #ai-chat-input-container {
+            padding: 1rem;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+        }
+        #ai-chat-input {
+            flex-grow: 1;
+            border: 1px solid #d1d5db;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            transition: box-shadow 0.2s;
+        }
+        #ai-chat-input:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px #4f46e5;
+        }
+        #ai-chat-send {
+            margin-left: 0.5rem;
+            background-color: #4f46e5;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #ai-chat-send:hover {
+            background-color: #4338ca;
+        }
+        .ask-ai-btn {
+            background-color: #6366f1;
+            color: white;
+            padding: 2px 6px;
+            font-size: 0.7rem;
+            border-radius: 4px;
+            margin-left: 8px;
+            cursor: pointer;
+        }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800">
+<body class="bg-gray-100 text-gray-800">
 
-    <div class="container mx-auto p-4 md:p-8">
-        <header class="text-center mb-8">
+    <div class="container mx-auto p-4 md:p-8 space-y-8">
+        <header class="text-center py-8 bg-white rounded-xl shadow-sm">
             <h1 class="text-3xl md:text-4xl font-bold text-gray-900">MySQL to PostgreSQL Migration Assistant</h1>
-            <p class="text-md text-gray-600 mt-2">Dynamically connect to your database and migrate data.</p>
+            <p class="text-md text-gray-600 mt-2">A powerful tool to streamline your database migration workflow.</p>
         </header>
         
         <div id="status-area" class="mb-4 p-4 text-center rounded-md hidden"></div>
 
         <!-- Saved Mappings Section -->
-        <div id="saved-mappings-section" class="bg-white p-6 rounded-lg shadow-md mb-8">
-             <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Manage Mappings</h2>
-             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label for="savedMappingsSelector" class="block text-sm font-medium text-gray-700 mb-1">Load Existing Mapping</label>
-                    <div class="flex">
-                        <select id="savedMappingsSelector" class="w-full p-2 border rounded-l-md">
-                             <option value="">-- Loading mappings... --</option>
-                        </select>
-                        <button id="loadMappingButton" type="button" class="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700 transition">Load</button>
-                    </div>
-                </div>
-                <div>
-                    <label for="newMappingNameInput" class="block text-sm font-medium text-gray-700 mb-1">Save Current Mapping</label>
-                    <div class="flex">
-                        <input type="text" id="newMappingNameInput" placeholder="Enter a name for this mapping" class="w-full p-2 border rounded-l-md">
-                        <button id="saveMappingButton" type="button" class="bg-green-600 text-white px-4 py-2 rounded-r-md hover:bg-green-700 transition">Save</button>
-                    </div>
-                </div>
+        <div id="saved-mappings-section" class="card">
+             <h2 class="text-2xl font-semibold card-header">Manage Mappings</h2>
+             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div>
+                     <label for="savedMappingsSelector" class="block text-sm font-medium text-gray-700 mb-1">Load Existing Mapping</label>
+                     <div class="flex">
+                         <select id="savedMappingsSelector" class="w-full p-2 border border-gray-300 rounded-l-md focus:ring-indigo-500 focus:border-indigo-500">
+                              <option value="">-- Loading mappings... --</option>
+                         </select>
+                         <button id="loadMappingButton" type="button" class="btn btn-primary rounded-l-none">Load</button>
+                     </div>
+                 </div>
+                 <div>
+                     <label for="newMappingNameInput" class="block text-sm font-medium text-gray-700 mb-1">Save Current Mapping</label>
+                     <div class="flex">
+                         <input type="text" id="newMappingNameInput" placeholder="Enter a name for this mapping" class="w-full p-2 border border-gray-300 rounded-l-md focus:ring-indigo-500 focus:border-indigo-500">
+                         <button id="saveMappingButton" type="button" class="btn btn-secondary rounded-l-none">Save</button>
+                     </div>
+                 </div>
              </div>
         </div>
 
         <!-- Step 1: Provide MySQL Dump File Path -->
-        <div id="step1" class="bg-white p-6 rounded-lg shadow-md mb-8">
-            <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Step 1: Select MySQL Dump File</h2>
+        <div id="step1" class="card">
+            <h2 class="text-2xl font-semibold card-header">Step 1: Select MySQL Dump File</h2>
             <p class="text-gray-600 mb-4">Select a file from the `sql_files` directory on the server, or provide a custom path.</p>
-            <select id="sqlFileSelector" class="w-full p-2 border rounded-md mb-2">
+            <select id="sqlFileSelector" class="w-full p-2 border border-gray-300 rounded-md mb-2 focus:ring-indigo-500 focus:border-indigo-500">
                 <option value="">-- Loading files... --</option>
             </select>
-            <input type="text" id="sqlFilePathInput" placeholder="/path/to/your/dump.sql" class="w-full p-2 border rounded-md hidden">
-            <button id="parseSqlFileButton" type="button" class="mt-4 bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 transition">Parse SQL File</button>
+            <input type="text" id="sqlFilePathInput" placeholder="/path/to/your/dump.sql" class="w-full p-2 border border-gray-300 rounded-md hidden focus:ring-indigo-500 focus:border-indigo-500">
+            <button id="parseSqlFileButton" type="button" class="mt-4 btn btn-primary">Parse SQL File</button>
         </div>
 
         <!-- Step 2: Connect to PostgreSQL -->
-        <div id="step2" class="bg-white p-6 rounded-lg shadow-md mb-8 hidden">
-            <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Step 2: Connect to PostgreSQL</h2>
+        <div id="step2" class="card hidden">
+            <h2 class="text-2xl font-semibold card-header">Step 2: Connect to PostgreSQL</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input type="text" id="pgHost" placeholder="Hostname (e.g., localhost)" class="p-2 border rounded-md" value="localhost">
-                <input type="number" id="pgPort" value="5432" placeholder="Port" class="p-2 border rounded-md">
-                <input type="text" id="pgUser" placeholder="Username" class="p-2 border rounded-md" value="postgres">
-                <input type="password" id="pgPassword" placeholder="Password" class="p-2 border rounded-md" value="password">
+                <input type="text" id="pgHost" placeholder="Hostname (e.g., localhost)" class="p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" value="localhost">
+                <input type="number" id="pgPort" value="5432" placeholder="Port" class="p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
+                <input type="text" id="pgUser" placeholder="Username" class="p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" value="postgres">
+                <input type="password" id="pgPassword" placeholder="Password" class="p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" value="password">
             </div>
-            <button id="fetchDatabasesButton" type="button" class="mt-4 bg-green-600 text-white px-5 py-2 rounded-md hover:bg-green-700 transition">Connect & Fetch Databases</button>
+            <button id="fetchDatabasesButton" type="button" class="mt-4 btn btn-secondary">Connect & Fetch Databases</button>
         </div>
         
         <!-- Step 2b: Select Database -->
-        <div id="step2b-db-select" class="bg-white p-6 rounded-lg shadow-md mb-8 hidden">
+        <div id="step2b-db-select" class="card hidden">
             <h3 class="text-xl font-semibold mb-2">Select Target Database</h3>
-            <select id="dbSelector" class="w-full p-2 border rounded-md mb-4"></select>
-            <button id="fetchTablesButton" type="button" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition">Fetch Tables for Selected DB</button>
+            <select id="dbSelector" class="w-full p-2 border border-gray-300 rounded-md mb-4 focus:ring-indigo-500 focus:border-indigo-500"></select>
+            <button id="fetchTablesButton" type="button" class="btn btn-secondary">Fetch Tables for Selected DB</button>
         </div>
 
         <!-- Step 3: Mapping Interface -->
         <div id="step3" class="hidden">
-            <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Step 3: Map Tables and Columns</h2>
-            <div id="mapping-container">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div class="bg-white p-6 rounded-lg shadow-md">
-                        <h3 class="text-xl font-semibold mb-4 text-blue-800">Source (MySQL)</h3>
-                        <div id="mysql-table-filter" class="mb-4"></div>
-                        <div id="mysqlSchema" class="space-y-4"></div>
+            <div class="card">
+                <h2 class="text-2xl font-semibold card-header">Step 3: Map Tables and Columns</h2>
+                <div id="mapping-container">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                            <h3 class="text-xl font-semibold mb-4 text-blue-800">Source (MySQL)</h3>
+                            <div id="mysql-table-filter" class="mb-4"></div>
+                            <div id="mysqlSchema" class="space-y-4"></div>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-semibold mb-4 text-green-800">Target (PostgreSQL)</h3>
+                            <div id="pg-table-filter" class="mb-4"></div>
+                            <div id="postgresSchema" class="space-y-4"></div>
+                        </div>
                     </div>
-                    <div class="bg-white p-6 rounded-lg shadow-md">
-                        <h3 class="text-xl font-semibold mb-4 text-green-800">Target (PostgreSQL)</h3>
-                        <div id="pg-table-filter" class="mb-4"></div>
-                        <div id="postgresSchema" class="space-y-4"></div>
-                    </div>
+                    <svg id="mapping-svg">
+                        <defs>
+                            <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5568" />
+                            </marker>
+                        </defs>
+                    </svg>
                 </div>
-                <svg id="mapping-svg">
-                    <defs>
-                        <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5568" />
-                        </marker>
-                    </defs>
-                </svg>
             </div>
         </div>
 
         <!-- Custom Commands Section -->
-        <div id="step3b-custom-commands" class="hidden bg-white p-6 rounded-lg shadow-md my-8">
-            <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Custom SQL Commands (Optional)</h2>
+        <div id="step3b-custom-commands" class="card hidden">
+            <h2 class="text-2xl font-semibold card-header">Custom SQL Commands (Optional)</h2>
             <p class="text-gray-600 mb-4">Enter SQL commands to run on the target database before or after the migration. Separate multiple commands with a semicolon (;).</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label for="pre-migration-commands" class="block text-sm font-medium text-gray-700 mb-1">Pre-Migration Commands</label>
-                    <textarea id="pre-migration-commands" rows="4" class="w-full p-2 border rounded-md font-mono text-sm" placeholder="e.g., CREATE EXTENSION IF NOT EXISTS &quot;uuid-ossp&quot;;"></textarea>
+                    <textarea id="pre-migration-commands" rows="4" class="w-full p-2 border border-gray-300 rounded-md font-mono text-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., CREATE EXTENSION IF NOT EXISTS &quot;uuid-ossp&quot;;"></textarea>
                 </div>
                 <div>
                     <label for="post-migration-commands" class="block text-sm font-medium text-gray-700 mb-1">Post-Migration Commands</label>
-                    <textarea id="post-migration-commands" rows="4" class="w-full p-2 border rounded-md font-mono text-sm" placeholder="e.g., CREATE INDEX idx_users_email ON users(email);"></textarea>
+                    <textarea id="post-migration-commands" rows="4" class="w-full p-2 border border-gray-300 rounded-md font-mono text-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., CREATE INDEX idx_users_email ON users(email);"></textarea>
                 </div>
             </div>
         </div>
 
         <!-- Step 4: Run Migration -->
-        <div id="step4" class="hidden mt-8 text-center">
-            <div class="space-y-2">
-                <label class="flex items-center justify-center">
+        <div id="step4" class="card hidden text-center">
+             <h2 class="text-2xl font-semibold card-header">Step 4: Execute Migration</h2>
+            <div class="space-y-3 my-4">
+                <label class="flex items-center justify-center cursor-pointer">
                     <input type="checkbox" id="truncateCheckbox" class="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500">
                     <span class="ml-2 text-gray-700">Clear target tables before migrating (TRUNCATE)</span>
                 </label>
-                <label class="flex items-center justify-center">
+                <label class="flex items-center justify-center cursor-pointer">
                     <input type="checkbox" id="upsertCheckbox" class="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500">
                     <span class="ml-2 text-gray-700">Update existing records on conflict (Upsert on 'id' column)</span>
                 </label>
             </div>
-            <button id="runMigrationButton" type="button" class="mt-4 bg-purple-600 text-white font-bold px-8 py-3 rounded-lg hover:bg-purple-700 transition shadow-lg">RUN MIGRATION</button>
+            <button id="runMigrationButton" type="button" class="mt-4 btn bg-purple-600 text-white hover:bg-purple-700 shadow-lg text-lg px-8 py-3">RUN MIGRATION</button>
         </div>
 
     </div>
     
     <!-- Modals -->
-    <div id="settings-modal" class="modal-overlay hidden">
+    <div id="settings-modal" class="modal-overlay">
         <div id="settings-modal-content" class="modal-content"></div>
     </div>
-    <div id="mapping-panel-modal" class="modal-overlay hidden">
+    <div id="mapping-panel-modal" class="modal-overlay">
         <div id="mapping-panel-content" class="modal-content"></div>
     </div>
-    <div id="data-preview-modal" class="modal-overlay hidden">
+    <div id="data-preview-modal" class="modal-overlay">
         <div id="data-preview-content" class="modal-content"></div>
     </div>
+
+    <!-- AI Assistant -->
+    <button id="ai-assistant-button">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10 2a6 6 0 00-6 6v3.586l-1.707 1.707A1 1 0 003 15h4v1H7a1 1 0 100 2h6a1 1 0 100-2h-2v-1h4a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
+        </svg>
+    </button>
+    <div id="ai-chat-modal-overlay" class="modal-overlay">
+        <div id="ai-chat-modal">
+            <div id="ai-chat-header">
+                <span>AI Migration Assistant</span>
+                <button id="ai-chat-close" class="font-bold text-xl">&times;</button>
+            </div>
+            <div id="ai-chat-history">
+                <div class="ai-message">Hello! I'm your migration assistant. How can I help you with this tool?</div>
+            </div>
+            <div id="ai-chat-input-container">
+                <input type="text" id="ai-chat-input" placeholder="Ask a question...">
+                <button id="ai-chat-send" class="btn btn-primary">Send</button>
+            </div>
+        </div>
+    </div>
+
 
     <script>
         // Global state variables
@@ -184,6 +381,57 @@
             document.getElementById('runMigrationButton').addEventListener('click', runMigration);
             document.getElementById('loadMappingButton').addEventListener('click', loadSelectedMapping);
             document.getElementById('saveMappingButton').addEventListener('click', saveCurrentMapping);
+
+            // AI Assistant Listeners
+            document.getElementById('ai-assistant-button').addEventListener('click', () => {
+                const modalOverlay = document.getElementById('ai-chat-modal-overlay');
+                modalOverlay.classList.remove('hidden');
+                setTimeout(() => modalOverlay.classList.add('visible'), 10);
+            });
+            document.getElementById('ai-chat-close').addEventListener('click', () => {
+                const modalOverlay = document.getElementById('ai-chat-modal-overlay');
+                modalOverlay.classList.remove('visible');
+                setTimeout(() => modalOverlay.classList.add('hidden'), 300);
+            });
+            document.getElementById('ai-chat-send').addEventListener('click', () => sendChatMessage());
+            document.getElementById('ai-chat-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendChatMessage();
+                }
+            });
+            
+            // Listener for error text selection
+            document.body.addEventListener('click', (e) => {
+                const askAiButton = document.getElementById('ask-ai-on-selection');
+                if (askAiButton && e.target.id !== 'ask-ai-on-selection') {
+                    askAiButton.remove();
+                }
+            });
+
+            document.getElementById('status-area').addEventListener('mouseup', (e) => {
+                const selection = window.getSelection();
+                const selectedText = selection.toString().trim();
+                const askAiButton = document.getElementById('ask-ai-on-selection');
+                if (askAiButton) askAiButton.remove();
+
+                if (selectedText && e.target.closest('.error-details')) {
+                    const newButton = document.createElement('button');
+                    newButton.id = 'ask-ai-on-selection';
+                    newButton.textContent = 'Ask AI about this error';
+                    newButton.className = 'ask-ai-btn absolute bg-indigo-600 text-white px-2 py-1 rounded shadow-lg text-xs z-50';
+                    document.body.appendChild(newButton);
+                    newButton.style.left = `${e.pageX}px`;
+                    newButton.style.top = `${e.pageY + 5}px`;
+                    
+                    const errorDetailsDiv = e.target.closest('.error-details');
+                    const errorJson = errorDetailsDiv.dataset.errorJson;
+
+                    newButton.onclick = () => {
+                        askAiAboutError(JSON.parse(errorJson));
+                        newButton.remove();
+                    };
+                }
+            });
         });
 
         async function initializeStep1() {
@@ -361,14 +609,18 @@
                     if (stats.failed > 0) {
                         summaryHtml += `<p class="text-red-700">Rows Failed: ${stats.failed}</p>`;
                         if (stats.errors && stats.errors.length > 0) {
-                            summaryHtml += `<button onclick="toggleErrorDetails('${table}-errors')" class="text-sm text-blue-600 hover:underline mt-1">Show Errors</button>`;
-                            summaryHtml += `<div id="${table}-errors" class="hidden error-details">`;
-                            stats.errors.forEach(err => {
-                                summaryHtml += `<div><strong>Error:</strong> ${escapeHtml(err.error)}</div>`;
-                                summaryHtml += `<div class="mt-1"><strong>Query:</strong> <pre>${escapeHtml(err.query)}</pre></div>`;
-                                summaryHtml += `<div class="mt-1"><strong>Values:</strong> ${escapeHtml(JSON.stringify(err.values))}</div><hr class="my-2 border-gray-600">`;
+                            stats.errors.forEach((err, index) => {
+                                const errorId = `${table}-error-${index}`;
+                                const errorJson = escapeHtml(JSON.stringify(err));
+                                summaryHtml += `
+                                    <div class="error-details mt-2" data-error-json='${errorJson}'>
+                                        <div><strong>Error:</strong> ${escapeHtml(err.error)} 
+                                            <button class="ask-ai-btn" onclick='askAiAboutError(${errorJson})'>Ask AI</button>
+                                        </div>
+                                        <div class="mt-1"><strong>Query:</strong> <pre>${escapeHtml(err.query)}</pre></div>
+                                        <div class="mt-1"><strong>Values:</strong> ${escapeHtml(JSON.stringify(err.values))}</div>
+                                    </div>`;
                             });
-                            summaryHtml += `</div>`;
                         }
                     }
                     summaryHtml += `</div>`;
@@ -382,10 +634,6 @@
             } catch (error) {
                 handleFetchError(error, "running migration");
             }
-        }
-
-        function toggleErrorDetails(elementId) {
-            document.getElementById(elementId).classList.toggle('hidden');
         }
 
         function escapeHtml(unsafe) {
@@ -424,7 +672,7 @@
             dropdownContainer.className = 'relative';
             const dropdownButton = document.createElement('button');
             dropdownButton.type = 'button';
-            dropdownButton.className = 'w-full text-left p-2 border rounded-md bg-white flex justify-between items-center';
+            dropdownButton.className = 'w-full text-left p-2 border border-gray-300 rounded-md bg-white flex justify-between items-center';
             dropdownButton.innerHTML = '<span>Select tables to display...</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
             const dropdownPanel = document.createElement('div');
             dropdownPanel.className = 'hidden absolute bg-white border mt-1 rounded-md shadow-lg z-20 w-full';
@@ -433,7 +681,7 @@
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
             searchInput.placeholder = 'Search tables...';
-            searchInput.className = 'w-full p-1 border rounded-md text-sm';
+            searchInput.className = 'w-full p-1 border border-gray-300 rounded-md text-sm';
             searchContainer.appendChild(searchInput);
             dropdownPanel.appendChild(searchContainer);
             const listContainer = document.createElement('div');
@@ -495,7 +743,7 @@
         function createSchemaTableElement(tableName, columns, type) {
             const tableDiv = document.createElement('div');
             tableDiv.id = `${type}-table-${tableName}`;
-            tableDiv.className = 'p-4 border rounded-lg';
+            tableDiv.className = 'p-4 border border-gray-200 rounded-lg bg-gray-50';
             tableDiv.style.display = 'none';
 
             const headerDiv = document.createElement('div');
@@ -528,7 +776,7 @@
             colsList.className = 'mt-2 space-y-2';
             columns.forEach(col => {
                 const colItem = document.createElement('div');
-                colItem.className = 'column-item p-2 border rounded-md cursor-pointer';
+                colItem.className = 'column-item p-2 border border-gray-200 rounded-md cursor-pointer bg-white';
                 const mainContent = document.createElement('div');
                 mainContent.className = 'flex justify-between items-center';
                 const nameAndType = document.createElement('div');
@@ -624,8 +872,12 @@
                 if (rule.source_table) {
                     sourceTables.add(rule.source_table);
                 }
-                if (rule.type === 'transformation' && rule.params && rule.params.columns) {
-                    // This part of logic is complex, for now we rely on top-level source_table.
+                if (rule.type === 'transformation' && rule.params && rule.params.parts) {
+                    rule.params.parts.forEach(part => {
+                        if (part.type === 'column' && rule.source_table) {
+                             sourceTables.add(rule.source_table);
+                        }
+                    });
                 }
             }
             return Array.from(sourceTables);
@@ -745,13 +997,15 @@
         // --- Modals & Panels ---
         function openMappingPanel(pgTable, pgCol) {
             const modal = document.getElementById('mapping-panel-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => modal.classList.add('visible'), 10);
             const content = document.getElementById('mapping-panel-content');
             const currentRule = mappingRules[pgTable]?.[pgCol.name] || {};
             let html = `<h2 class="text-2xl font-bold mb-4">Set Mapping for ${pgTable}.${pgCol.name}</h2>`;
             html += `
                 <div class="mb-4">
                     <label class="block font-semibold mb-1">Mapping Type</label>
-                    <select id="mapping-type-selector" class="w-full p-2 border rounded-md">
+                    <select id="mapping-type-selector" class="w-full p-2 border border-gray-300 rounded-md">
                         <option value="none">-- None --</option>
                         <option value="direct">Direct Mapping (from Source)</option>
                         <option value="transformation">Transformation (e.g., CONCAT)</option>
@@ -772,7 +1026,7 @@
                     <div class="space-y-4">
                         <div>
                             <label class="block font-semibold text-sm mb-1">Change Data Type (Cast)</label>
-                            <select id="post-transform-cast" class="w-full p-2 border rounded-md">
+                            <select id="post-transform-cast" class="w-full p-2 border border-gray-300 rounded-md">
                                 <option value="">-- Don't Change --</option>
                                 <option value="string">String</option>
                                 <option value="integer">Integer</option>
@@ -783,8 +1037,8 @@
                         <div>
                             <label class="block font-semibold text-sm mb-1">Re-format Date</label>
                             <div class="grid grid-cols-2 gap-2">
-                                <input type="text" id="post-transform-date-from" class="w-full p-2 border rounded-md" placeholder="Source Format (e.g., %Y-%m-%d)">
-                                <input type="text" id="post-transform-date-to" class="w-full p-2 border rounded-md" placeholder="Target Format (e.g., %d %B %Y)">
+                                <input type="text" id="post-transform-date-from" class="w-full p-2 border border-gray-300 rounded-md" placeholder="Source Format (e.g., %Y-%m-%d)">
+                                <input type="text" id="post-transform-date-to" class="w-full p-2 border border-gray-300 rounded-md" placeholder="Target Format (e.g., %d %B %Y)">
                             </div>
                              <p class="text-xs text-gray-500 mt-1">Uses Python strptime/strftime format codes. Leave blank to disable.</p>
                         </div>
@@ -800,7 +1054,7 @@
                         <label for="fallback-enabled-checkbox" class="ml-2">Enable Fallback</label>
                     </div>
                     <div id="fallback-options-container" class="hidden space-y-4">
-                        <select id="fallback-type-selector" class="w-full p-2 border rounded-md">
+                        <select id="fallback-type-selector" class="w-full p-2 border border-gray-300 rounded-md">
                             <option value="static">Static Value</option>
                             <option value="auto-increment">Auto-Increment</option>
                             <option value="set_null">Set NULL</option>
@@ -809,8 +1063,8 @@
                     </div>
                 </div>
                 <div class="flex justify-end space-x-4 mt-6">
-                    <button type="button" onclick="closeMappingPanelModal()" class="px-4 py-2 bg-gray-200 rounded-md">Cancel</button>
-                    <button type="button" onclick="saveMappingRule('${pgTable}', '${pgCol.name}')" class="px-4 py-2 bg-blue-600 text-white rounded-md">Save Mapping</button>
+                    <button type="button" onclick="closeMappingPanelModal()" class="btn btn-tertiary">Cancel</button>
+                    <button type="button" onclick="saveMappingRule('${pgTable}', '${pgCol.name}')" class="btn btn-primary">Save Mapping</button>
                 </div>
             `;
             content.innerHTML = html;
@@ -858,7 +1112,6 @@
 
             typeSelector.dispatchEvent(new Event('change'));
             renderFallbackOptions(currentRule.on_null);
-            modal.classList.remove('hidden');
         }
 
         function renderMappingOptions(pgTable, pgCol) {
@@ -867,8 +1120,8 @@
             const currentRule = mappingRules[pgTable]?.[pgCol] || {};
             let html = '';
 
-            const createSelect = (id, label, options) => `<div><label class="block font-semibold text-sm mb-1">${label}</label><select id="${id}" class="w-full p-2 border rounded-md">${options}</select></div>`;
-            const createInput = (id, label, value, type='text') => `<div><label class="block font-semibold text-sm mb-1">${label}</label><input type="${type}" id="${id}" class="w-full p-2 border rounded-md" value="${escapeHtml(value)}"></div>`;
+            const createSelect = (id, label, options) => `<div><label class="block font-semibold text-sm mb-1">${label}</label><select id="${id}" class="w-full p-2 border border-gray-300 rounded-md">${options}</select></div>`;
+            const createInput = (id, label, value, type='text') => `<div><label class="block font-semibold text-sm mb-1">${label}</label><input type="${type}" id="${id}" class="w-full p-2 border border-gray-300 rounded-md" value="${escapeHtml(value)}"></div>`;
 
             if (type === 'direct') {
                 let allSourceCols = '';
@@ -925,7 +1178,7 @@
                 const tableOptions = Object.keys(mysqlSchemaData).sort().map(t => `<option value="${t}">${t}</option>`).join('');
                 html = createSelect('transform-source-table', 'Source Table for Transformation', tableOptions);
                 html += createSelect('transform-function', 'Function', '<option value="CONCAT">CONCAT</option>');
-                html += `<div id="transform-params" class="p-2 border rounded-md bg-gray-50 space-y-2 mt-2"></div>`;
+                html += `<div id="transform-params" class="p-2 border border-gray-200 rounded-md bg-gray-50 space-y-2 mt-2"></div>`;
             } else if (type === 'group_and_aggregate') {
                 const tableOptions = Object.keys(mysqlSchemaData).sort().map(t => `<option value="${t}">${t}</option>`).join('');
                 html = createSelect('aggregate-source-table', 'Source Table for Aggregation', tableOptions);
@@ -1016,11 +1269,11 @@
 
             parts.forEach((part, index) => {
                 const partDiv = document.createElement('div');
-                partDiv.className = 'flex items-center space-x-2 p-2 border rounded-md bg-white';
+                partDiv.className = 'flex items-center space-x-2 p-2 border border-gray-200 rounded-md bg-white';
                 partDiv.dataset.index = index;
 
                 let partHtml = `
-                    <select class="p-1 border rounded-md text-sm part-type-select" onchange="handleConcatPartTypeChange(this)">
+                    <select class="p-1 border border-gray-300 rounded-md text-sm part-type-select" onchange="handleConcatPartTypeChange(this)">
                         <option value="column" ${part.type === 'column' ? 'selected' : ''}>Column</option>
                         <option value="static" ${part.type === 'static' ? 'selected' : ''}>Static Text</option>
                         <option value="separator" ${part.type === 'separator' ? 'selected' : ''}>Separator</option>
@@ -1041,18 +1294,18 @@
             let inputHtml = '';
             switch(part.type) {
                 case 'column':
-                    inputHtml = `<select class="w-full p-1 border rounded-md text-sm part-value">${colOptions}</select>`;
+                    inputHtml = `<select class="w-full p-1 border border-gray-300 rounded-md text-sm part-value">${colOptions}</select>`;
                     break;
                 case 'static':
                 case 'separator':
-                    inputHtml = `<input type="text" class="w-full p-1 border rounded-md text-sm part-value" placeholder="Enter text" value="${escapeHtml(part.value || '')}">`;
+                    inputHtml = `<input type="text" class="w-full p-1 border border-gray-300 rounded-md text-sm part-value" placeholder="Enter text" value="${escapeHtml(part.value || '')}">`;
                     break;
                 case 'auto-increment':
                     inputHtml = `
                         <div class="flex space-x-1 text-sm">
-                            <input type="text" class="w-1/2 p-1 border rounded-md part-value" placeholder="Counter Name (unique)" value="${escapeHtml(part.key || '')}">
-                            <input type="number" class="w-1/4 p-1 border rounded-md part-start" placeholder="Start" value="${escapeHtml(part.start || 1)}">
-                            <input type="number" class="w-1/4 p-1 border rounded-md part-step" placeholder="Step" value="${escapeHtml(part.step || 1)}">
+                            <input type="text" class="w-1/2 p-1 border border-gray-300 rounded-md part-value" placeholder="Counter Name (unique)" value="${escapeHtml(part.key || '')}">
+                            <input type="number" class="w-1/4 p-1 border border-gray-300 rounded-md part-start" placeholder="Start" value="${escapeHtml(part.start || 1)}">
+                            <input type="number" class="w-1/4 p-1 border border-gray-300 rounded-md part-step" placeholder="Step" value="${escapeHtml(part.step || 1)}">
                         </div>`;
                     break;
             }
@@ -1109,7 +1362,7 @@
             const container = document.getElementById('fallback-options');
             const type = document.getElementById('fallback-type-selector').value;
             let html = '';
-            const createInput = (id, label, value, type='text') => `<div><label class="block font-semibold text-sm mb-1">${label}</label><input type="${type}" id="${id}" class="w-full p-2 border rounded-md" value="${escapeHtml(value)}"></div>`;
+            const createInput = (id, label, value, type='text') => `<div><label class="block font-semibold text-sm mb-1">${label}</label><input type="${type}" id="${id}" class="w-full p-2 border border-gray-300 rounded-md" value="${escapeHtml(value)}"></div>`;
 
             if (type === 'static') {
                 html = createInput('fallback-static-value', 'Fallback Static Value', currentFallbackRule.value || '');
@@ -1220,6 +1473,8 @@
 
         function openSettingsModal(tableName) {
             const modal = document.getElementById('settings-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => modal.classList.add('visible'), 10);
             const content = document.getElementById('settings-modal-content');
             const tableFilters = migrationFilters[tableName] || {};
             const tableSort = tableFilters.sort || {};
@@ -1232,28 +1487,28 @@
             html += `<div class="mb-4 border-b pb-4">
                         <h3 class="font-semibold mb-2">Data Merging (for multi-table sources)</h3>
                         <p class="text-sm text-gray-600 mb-2">If mapping from multiple source tables to one target, specify the column used to link rows from this table to others (e.g., 'id', 'user_id').</p>
-                        <input type="text" id="merge-key-input" class="w-full p-2 border rounded-md" placeholder="e.g., id" value="${escapeHtml(tableFilters.merge_key || 'id')}">
+                        <input type="text" id="merge-key-input" class="w-full p-2 border border-gray-300 rounded-md" placeholder="e.g., id" value="${escapeHtml(tableFilters.merge_key || 'id')}">
                     </div>`;
             html += `<div class="mb-4 border-b pb-4">
                         <h3 class="font-semibold mb-2">Sort Source Data</h3>
                         <p class="text-sm text-gray-600 mb-2">Sort data before processing. Note: This is only applied when this is the only source table for a mapping.</p>
                         <div class="flex space-x-2">
-                            <select id="sort-column-select" class="w-2/3 p-2 border rounded-md">${colOptions}</select>
-                            <select id="sort-order-select" class="w-1/3 p-2 border rounded-md">
+                            <select id="sort-column-select" class="w-2/3 p-2 border border-gray-300 rounded-md">${colOptions}</select>
+                            <select id="sort-order-select" class="w-1/3 p-2 border border-gray-300 rounded-md">
                                 <option value="ASC" ${tableSort.order === 'ASC' ? 'selected' : ''}>Ascending</option>
                                 <option value="DESC" ${tableSort.order === 'DESC' ? 'selected' : ''}>Descending</option>
                             </select>
                         </div>
                     </div>`;
             html += `<div class="mb-6"><label class="block font-semibold mb-1">WHERE Clause (Filter Rows)</label>`;
-            html += `<input type="text" id="where-clause-input" class="w-full p-2 border rounded-md" placeholder="e.g., role = 'teacher' AND status != 'inactive'" value="${escapeHtml(tableFilters.where || '')}"></div>`;
+            html += `<input type="text" id="where-clause-input" class="w-full p-2 border border-gray-300 rounded-md" placeholder="e.g., role = 'teacher' AND status != 'inactive'" value="${escapeHtml(tableFilters.where || '')}"></div>`;
             html += `<div class="mb-4"><h3 class="font-semibold mb-2">Value Replacements</h3><div class="space-y-3">`;
             mysqlSchemaData[tableName].columns.forEach(col => {
-                html += `<div class="p-2 border-t"><p class="font-medium">${col.name}</p><div id="replacements-for-${col.name}" class="space-y-2 mt-2"></div>`;
+                html += `<div class="p-2 border-t border-gray-200"><p class="font-medium">${col.name}</p><div id="replacements-for-${col.name}" class="space-y-2 mt-2"></div>`;
                 html += `<button type="button" onclick="addReplacementRule('${tableName}', '${col.name}')" class="text-sm text-blue-600 hover:underline mt-2">+ Add Replacement</button></div>`;
             });
             html += `</div></div>`;
-            html += `<div class="flex justify-end space-x-4 mt-6"><button type="button" onclick="closeSettingsModal()" class="px-4 py-2 bg-gray-200 rounded-md">Cancel</button><button type="button" onclick="saveSettings('${tableName}')" class="px-4 py-2 bg-blue-600 text-white rounded-md">Save Settings</button></div>`;
+            html += `<div class="flex justify-end space-x-4 mt-6"><button type="button" onclick="closeSettingsModal()" class="btn btn-tertiary">Cancel</button><button type="button" onclick="saveSettings('${tableName}')" class="btn btn-primary">Save Settings</button></div>`;
             
             content.innerHTML = html;
             
@@ -1262,7 +1517,6 @@
                     tableFilters.replacements[colName].forEach(rule => addReplacementRule(tableName, colName, rule.find, rule.replace));
                 }
             }
-            modal.classList.remove('hidden');
         }
 
         function addReplacementRule(tableName, colName, findVal = '', replaceVal = '') {
@@ -1270,9 +1524,9 @@
             const ruleDiv = document.createElement('div');
             ruleDiv.className = 'flex items-center space-x-2';
             ruleDiv.innerHTML = `
-                <input type="text" class="w-1/2 p-1 border rounded-md text-sm find-input" placeholder="Find this value" value="${escapeHtml(findVal)}">
+                <input type="text" class="w-1/2 p-1 border border-gray-300 rounded-md text-sm find-input" placeholder="Find this value" value="${escapeHtml(findVal)}">
                 <span class="font-bold text-gray-500">→</span>
-                <input type="text" class="w-1/2 p-1 border rounded-md text-sm replace-input" placeholder="Replace with this" value="${escapeHtml(replaceVal)}">
+                <input type="text" class="w-1/2 p-1 border border-gray-300 rounded-md text-sm replace-input" placeholder="Replace with this" value="${escapeHtml(replaceVal)}">
                 <button type="button" onclick="this.parentElement.remove()" class="text-red-500 hover:text-red-700 font-bold">&times;</button>
             `;
             container.appendChild(ruleDiv);
@@ -1315,8 +1569,9 @@
 
         async function viewColumnData(tableName, columnName) {
             const modal = document.getElementById('data-preview-modal');
-            const content = document.getElementById('data-preview-content');
             modal.classList.remove('hidden');
+            setTimeout(() => modal.classList.add('visible'), 10);
+            const content = document.getElementById('data-preview-content');
             content.innerHTML = `<h2 class="text-2xl font-bold mb-4">Previewing ${tableName}.${columnName}</h2><p>Loading data...</p>`;
             
             const selector = document.getElementById('sqlFileSelector');
@@ -1366,8 +1621,9 @@
 
         async function viewSourceTable(tableName) {
             const modal = document.getElementById('data-preview-modal');
-            const content = document.getElementById('data-preview-content');
             modal.classList.remove('hidden');
+            setTimeout(() => modal.classList.add('visible'), 10);
+            const content = document.getElementById('data-preview-content');
             content.innerHTML = `<h2 class="text-2xl font-bold mb-4">Viewing Full Data for ${tableName}</h2><p>Loading data...</p>`;
 
             const selector = document.getElementById('sqlFileSelector');
@@ -1519,14 +1775,197 @@
         }
         
         function closeSettingsModal() {
-            document.getElementById('settings-modal').classList.add('hidden');
+            const modal = document.getElementById('settings-modal');
+            modal.classList.remove('visible');
+            setTimeout(() => modal.classList.add('hidden'), 300);
         }
         function closeMappingPanelModal() {
-            document.getElementById('mapping-panel-modal').classList.add('hidden');
+            const modal = document.getElementById('mapping-panel-modal');
+            modal.classList.remove('visible');
+            setTimeout(() => modal.classList.add('hidden'), 300);
         }
         function closeDataPreviewModal() {
-            document.getElementById('data-preview-modal').classList.add('hidden');
+            const modal = document.getElementById('data-preview-modal');
+            modal.classList.remove('visible');
+            setTimeout(() => modal.classList.add('hidden'), 300);
         }
+
+        // --- AI Assistant Logic ---
+        let chatHistory = [];
+
+        function getToolContext() {
+            return `
+You are an expert AI assistant for a MySQL to PostgreSQL database migration tool.
+Your goal is to help users understand and use this tool effectively.
+Current Date and Time: ${new Date().toString()}
+
+This tool has a Python Flask backend (app.py) and an HTML/JS frontend.
+
+**TOOL OVERVIEW**
+The user selects a MySQL .sql dump file and connects to a target PostgreSQL database. They then map source tables/columns to target tables/columns and run the migration.
+
+**BACKEND (app.py) CAPABILITIES:**
+The backend has several key functions:
+- \`_get_schema_from_sql_file\`: Parses a .sql file to find all 'CREATE TABLE' and 'INSERT' statements to understand the source database structure.
+- \`_parse_mysql_insert\`: A robust function that can parse complex MySQL 'INSERT' statements, including those with messy data (like embedded HTML), and statements that omit the column list.
+- \`_perform_migration\`: The main migration engine. It takes the user's mapping configuration and transforms/moves the data.
+- API Endpoints (e.g., /api/parse_sql_file, /api/get_tables, /api/run_migration): These are how the frontend communicates with the backend to perform actions.
+
+**FRONTEND CAPABILITIES:**
+The user interacts with a multi-step interface:
+1.  **Select SQL File**: User picks a .sql file from the server. The backend's \`_get_schema_from_sql_file\` is called to parse it.
+2.  **Connect to PostgreSQL**: User provides PG connection details to fetch a list of databases and then tables.
+3.  **Map Data**: This is the core step.
+    -   Users can drag-and-drop source columns to target columns for a 'direct' mapping.
+    -   Clicking a target column opens a detailed mapping panel with advanced options:
+        -   **Transformation**: Create new values, e.g., by concatenating multiple source columns.
+        -   **Lookup**: Fetch a value from another table (source or target) based on a matching key.
+        -   **Static Value**: Hardcode a specific value for a column.
+        -   **Auto-Increment**: Create a sequence of numbers.
+    -   **Post-Processing**: After a value is determined, it can be further processed (e.g., casting to integer, reformatting a date).
+    -   **Fallback**: Define a default value to use if the primary mapping rule results in NULL.
+4.  **Run Migration**: User can choose to truncate target tables first and then execute the migration.
+5.  **Ask AI on Error**: If a row fails to migrate, an "Ask AI" button appears. This gives you, the AI, the exact error, query, and data to provide a precise solution.
+
+**YOUR TASK:**
+Answer user questions clearly and concisely. Refer to the functions and steps above. If a user has a problem, guide them on how to use the tool's features to solve it. For example, if they need to combine a first name and last name, tell them to use a 'Transformation' mapping with the 'CONCAT' function. Be helpful and specific.
+`;
+        }
+
+        function getErrorAnalysisPrompt(errorDetails) {
+            return `
+You are a database expert specializing in MySQL to PostgreSQL migrations. A user has encountered an error while using a migration tool. Your task is to analyze the error and provide a clear, actionable solution.
+
+**CONTEXT:**
+- The user is migrating data from a MySQL dump file to a PostgreSQL database.
+- The tool failed to insert a row and has provided the following details.
+
+**ERROR DETAILS:**
+- **PostgreSQL Error Message:** ${errorDetails.error}
+- **Failed Query:** ${errorDetails.query}
+- **Data Values for the Failed Row:** ${JSON.stringify(errorDetails.values)}
+
+**YOUR TASK:**
+1.  **Explain the Cause:** In simple terms, what is the most likely reason for this error? Look for data type mismatches, constraint violations, or syntax issues between MySQL and PostgreSQL.
+2.  **Propose a Solution:** Based on the error, recommend a specific fix using the migration tool's features. Be very specific. For example:
+    - "The error indicates a data type mismatch. The solution is to use the 'Post-Processing' feature to cast the problematic column to the correct type."
+    - "This looks like a date format issue. You should use the 'Re-format Date' option in the 'Post-Processing' section."
+3.  **Provide Step-by-Step Instructions:** Give the user a clear, numbered list of steps to follow in the tool to apply your recommended solution. For example:
+    1. In the mapping interface, find the target column that is causing the error.
+    2. Click on it to open the mapping panel.
+    3. In the 'Post-Processing' section, find the 'Change Data Type (Cast)' dropdown.
+    4. Select the appropriate data type (e.g., 'Integer') from the list.
+    5. Click 'Save Mapping' and try running the migration again.
+
+Be direct, helpful, and focus on solving the user's problem with the tool's built-in capabilities.
+`;
+        }
+        
+        function askAiAboutError(errorDetails) {
+            const modalOverlay = document.getElementById('ai-chat-modal-overlay');
+            modalOverlay.classList.remove('hidden');
+            setTimeout(() => modalOverlay.classList.add('visible'), 10);
+            
+            const prompt = getErrorAnalysisPrompt(errorDetails);
+            sendChatMessage(prompt, "Tell me about this error...");
+        }
+
+        async function sendChatMessage(prompt = null, userDisplayMessage = null) {
+            const input = document.getElementById('ai-chat-input');
+            const history = document.getElementById('ai-chat-history');
+            const userText = userDisplayMessage || input.value.trim();
+
+            if (!userText) return;
+
+            // Display user message
+            const userMessageDiv = document.createElement('div');
+            userMessageDiv.className = 'chat-message user-message';
+            userMessageDiv.textContent = userText;
+            history.appendChild(userMessageDiv);
+
+            input.value = '';
+            history.scrollTop = history.scrollHeight;
+
+            // Prepare for AI response
+            const aiMessageDiv = document.createElement('div');
+            aiMessageDiv.className = 'chat-message ai-message';
+            aiMessageDiv.innerHTML = 'Thinking...';
+            history.appendChild(aiMessageDiv);
+            history.scrollTop = history.scrollHeight;
+
+            const fullPrompt = prompt || (getToolContext() + "\n\n---\n\nUser Question: " + userText);
+            
+            try {
+                const apiKey = "AIzaSyAVlRPQs2bwMTRw7oDOBC4cDDFmP7zIZkM";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                
+                const requestPayload = {
+                    contents: [{
+                        role: "user",
+                        parts: [{ text: fullPrompt }]
+                    }]
+                };
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestPayload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const aiText = result.candidates[0].content.parts[0].text;
+                    aiMessageDiv.innerHTML = markdownToHtml(aiText);
+                } else {
+                    aiMessageDiv.textContent = "Sorry, I couldn't get a response. The API might have returned an empty result.";
+                }
+
+            } catch (error) {
+                console.error("AI Assistant Error:", error);
+                aiMessageDiv.textContent = "Sorry, I encountered an error. Please check the console for details.";
+            }
+
+            history.scrollTop = history.scrollHeight;
+        }
+        
+        function markdownToHtml(md) {
+            // Basic Markdown to HTML conversion
+            let html = escapeHtml(md);
+            
+            // Headers
+            html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+            html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+            html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+
+            // Bold
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            
+            // Italic
+            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            
+            // Lists (simple implementation)
+            html = html.replace(/^\* (.*$)/gim, '<ul><li>$1</li></ul>');
+            html = html.replace(/<\/ul>\n<br><ul>/g, ''); // Merge consecutive list items
+
+            // Code blocks
+            html = html.replace(/```(.*?)```/gs, (match, p1) => `<pre><code>${escapeHtml(p1.trim())}</code></pre>`);
+            
+            // Inline code
+            html = html.replace(/`(.*?)`/g, '<code>$1</code>');
+
+            // Newlines
+            html = html.replace(/\n/g, '<br>');
+
+            return html;
+        }
+
     </script>
 </body>
 </html>
