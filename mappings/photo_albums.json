@@ -1,0 +1,21 @@
+{
+    "photo_albums": {
+        "department_id": {
+            "type": "target_lookup",
+            "lookup_table": "departments",
+            "get_col": "id",
+            "match_col": "department",
+            "default": "",
+            "where_col": "name"
+        },
+        "name": {
+            "type": "direct",
+            "value": "name",
+            "source_table": "album"
+        },
+        "created_at": {
+            "type": "static",
+            "value": "Mon, 14 Jul 2025 06:08:30 GMT"
+        }
+    }
+}

@@ -78,7 +78,7 @@
         .data-preview-table th { background-color: #f2f2f2; }
         .hidden { display: none !important; }
 
-        /* AI Assistant Styles */
+        /* AI Assistant Styles - Refined */
         #ai-assistant-button {
             position: fixed;
             bottom: 2rem;
@@ -109,81 +109,89 @@
             max-width: 700px;
             height: 80vh;
             max-height: 700px;
-            background: white;
+            background: #f9fafb; /* Lighter background for the modal */
             border-radius: 0.75rem;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
             display: flex;
             flex-direction: column;
         }
         #ai-chat-header {
-            padding: 1rem;
-            background: linear-gradient(to right, #4f46e5, #6366f1);
-            color: white;
-            font-weight: bold;
+            padding: 1rem 1.5rem;
+            background: white;
+            color: #111827; /* Darker text for header */
+            font-weight: 600; /* Bolder header font */
             border-top-left-radius: 0.75rem;
             border-top-right-radius: 0.75rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border-bottom: 1px solid #e5e7eb;
         }
         #ai-chat-history {
             flex-grow: 1;
-            padding: 1rem;
+            padding: 1.5rem;
             overflow-y: auto;
             background-color: #f9fafb;
         }
         .chat-message {
             margin-bottom: 1rem;
-            max-width: 90%;
+            max-width: 85%; /* Slightly smaller max-width */
             display: flex;
             flex-direction: column;
+            line-height: 1.6; /* Improved line spacing */
         }
         .user-message {
-            background-color: #dbeafe;
-            color: #1e40af;
-            padding: 0.75rem 1rem;
-            border-radius: 1rem 1rem 0.25rem 1rem;
+            background-color: #4f46e5; /* Primary color for user */
+            color: white;
+            padding: 0.75rem 1.25rem;
+            border-radius: 1.25rem 1.25rem 0.25rem 1.25rem;
             align-self: flex-end;
         }
         .ai-message {
-            background-color: #e5e7eb;
-            color: #1f2937;
-            padding: 0.75rem 1rem;
-            border-radius: 1rem 1rem 1rem 0.25rem;
+            background-color: #ffffff; /* AI messages on white cards */
+            color: #374151;
+            padding: 0.75rem 1.25rem;
+            border-radius: 1.25rem 1.25rem 1.25rem 0.25rem;
             align-self: flex-start;
+            border: 1px solid #e5e7eb; /* Subtle border for AI messages */
         }
-        .ai-message h1, .ai-message h2, .ai-message h3 { font-weight: bold; margin-top: 0.5em; margin-bottom: 0.25em; }
+        /* Refined typography inside AI messages */
+        .ai-message h1, .ai-message h2, .ai-message h3 { font-weight: 600; margin-top: 1em; margin-bottom: 0.5em; color: #111827; }
         .ai-message h1 { font-size: 1.25rem; }
         .ai-message h2 { font-size: 1.1rem; }
         .ai-message h3 { font-size: 1rem; }
-        .ai-message strong { font-weight: bold; }
+        .ai-message strong { font-weight: 600; color: #1f2937; }
         .ai-message em { font-style: italic; }
-        .ai-message ul { list-style-type: disc; margin-left: 1.5rem; }
-        .ai-message ol { list-style-type: decimal; margin-left: 1.5rem; }
-        .ai-message code { background-color: #d1d5db; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-family: monospace; }
-        .ai-message pre { background-color: #111827; color: #e5e7eb; padding: 0.5rem; border-radius: 0.25rem; overflow-x: auto; font-family: monospace; }
+        .ai-message ul, .ai-message ol { padding-left: 1.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+        .ai-message li { margin-bottom: 0.25rem; }
+        .ai-message code { background-color: #e5e7eb; color: #4b5563; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-family: 'Courier New', monospace; font-size: 0.9em; }
+        .ai-message pre { background-color: #1f2937; color: #d1d5db; padding: 1rem; margin-top: 0.5rem; border-radius: 0.5rem; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 0.9em; line-height: 1.5; }
+        .ai-message pre code { background: none; color: inherit; padding: 0; }
+
         #ai-chat-input-container {
-            padding: 1rem;
+            padding: 1rem 1.5rem;
             border-top: 1px solid #e5e7eb;
             display: flex;
+            background-color: white;
         }
         #ai-chat-input {
             flex-grow: 1;
             border: 1px solid #d1d5db;
-            padding: 0.5rem;
+            padding: 0.75rem;
             border-radius: 0.5rem;
             transition: box-shadow 0.2s;
         }
         #ai-chat-input:focus {
             outline: none;
-            box-shadow: 0 0 0 2px #4f46e5;
+            box-shadow: 0 0 0 2px #c7d2fe;
+            border-color: #6366f1;
         }
         #ai-chat-send {
-            margin-left: 0.5rem;
+            margin-left: 0.75rem;
             background-color: #4f46e5;
             color: white;
             border: none;
-            padding: 0.5rem 1rem;
+            padding: 0.75rem 1.25rem;
             border-radius: 0.5rem;
             cursor: pointer;
             transition: background-color 0.2s;
@@ -341,10 +349,10 @@
     <!-- AI Assistant -->
     <button id="ai-assistant-button">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M10 2a6 6 0 00-6 6v3.586l-1.707 1.707A1 1 0 003 15h4v1H7a1 1 0 100 2h6a1 1 0 100-2h-2v-1h4a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
+            <path fill-rule="evenodd" d="M10 2a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 2zM5.05 5.05a.75.75 0 011.06 0l1.06 1.06a.75.75 0 01-1.06 1.06l-1.06-1.06a.75.75 0 010-1.06zM13.89 6.11a.75.75 0 011.06-1.06l1.06 1.06a.75.75 0 01-1.06 1.06l-1.06-1.06zM18 10a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0118 10zM14.95 14.95a.75.75 0 01-1.06 0l-1.06-1.06a.75.75 0 011.06-1.06l1.06 1.06a.75.75 0 010 1.06zM6.11 13.89a.75.75 0 01-1.06 1.06l-1.06-1.06a.75.75 0 111.06-1.06l1.06 1.06zM2 10a.75.75 0 01-.75-.75v-1.5a.75.75 0 011.5 0v1.5A.75.75 0 012 10zM10 18a.75.75 0 01-.75-.75v-1.5a.75.75 0 011.5 0v1.5A.75.75 0 0110 18zM10 15a5 5 0 100-10 5 5 0 000 10z" clip-rule="evenodd" />
         </svg>
     </button>
-    <div id="ai-chat-modal-overlay" class="modal-overlay">
+    <div id="ai-chat-modal-overlay" class="modal-overlay hidden">
         <div id="ai-chat-modal">
             <div id="ai-chat-header">
                 <span>AI Migration Assistant</span>
@@ -851,8 +859,17 @@
             for (const pgTable in mappingRules) {
                 for (const pgCol in mappingRules[pgTable]) {
                     const rule = mappingRules[pgTable][pgCol];
-                    if ((rule.type === 'direct' && rule.source_table === mysqlTable && rule.value === mysqlCol) ||
-                        (rule.type === 'transformation' && rule.source_table === mysqlTable && rule.params.columns.includes(mysqlCol))) {
+                    let shouldDelete = false;
+                    
+                    if (rule.type === 'direct' && rule.source_table === mysqlTable && rule.value === mysqlCol) {
+                        shouldDelete = true;
+                    } else if (rule.type === 'transformation' && rule.source_table === mysqlTable && rule.params && rule.params.parts) {
+                        if (rule.params.parts.some(part => part.type === 'column' && part.value === mysqlCol)) {
+                            shouldDelete = true;
+                        }
+                    }
+
+                    if (shouldDelete) {
                         delete mappingRules[pgTable][pgCol];
                     }
                 }
@@ -1835,73 +1852,58 @@
         }
 
         // --- AI Assistant Logic ---
-        let chatHistory = [];
-
+        
+        /**
+         * REFINED PROMPT for general questions. It's shorter and prioritizes key features.
+         */
         function getToolContext() {
             return `
-You are an expert AI assistant for a MySQL to PostgreSQL database migration tool.
-Your goal is to help users understand and use this tool effectively.
-Current Date and Time: ${new Date().toString()}
+You are an expert AI assistant for a "MySQL to PostgreSQL Migration Tool". Your goal is to help users by providing clear, concise answers about how to use the tool.
 
-This tool has a Python Flask backend (app.py) and an HTML/JS frontend.
+**Key Tool Features:**
+1.  **Schema Mapping:** Users map source MySQL tables/columns to target PostgreSQL tables/columns.
+2.  **Direct Mapping:** Drag-and-drop a source column to a target column.
+3.  **Advanced Mapping (Panel):** Clicking a target column opens a panel with powerful options:
+    * **Transformation:** Create new values (e.g., \`CONCAT\` to merge 'first_name' and 'last_name').
+    * **Lookup:** Fetch data from another table (e.g., get a \`user_id\` from a \`users\` table).
+    * **Static Value:** Set a fixed value for a column (e.g., always set a status to 'active').
+    * **Post-Processing:** Change data types (\`Cast\`) or re-format dates after getting a value.
+    * **Fallback:** Set a default value if the main mapping rule finds nothing (is null).
+4.  **Error Handling:** If a row fails, an "Ask AI" button appears, which gives you specific error details to debug.
 
-**TOOL OVERVIEW**
-The user selects a MySQL .sql dump file and connects to a target PostgreSQL database. They then map source tables/columns to target tables/columns and run the migration.
-
-**BACKEND (app.py) CAPABILITIES:**
-The backend has several key functions:
-- \`_get_schema_from_sql_file\`: Parses a .sql file to find all 'CREATE TABLE' and 'INSERT' statements to understand the source database structure.
-- \`_parse_mysql_insert\`: A robust function that can parse complex MySQL 'INSERT' statements, including those with messy data (like embedded HTML), and statements that omit the column list.
-- \`_perform_migration\`: The main migration engine. It takes the user's mapping configuration and transforms/moves the data.
-- API Endpoints (e.g., /api/parse_sql_file, /api/get_tables, /api/run_migration): These are how the frontend communicates with the backend to perform actions.
-
-**FRONTEND CAPABILITIES:**
-The user interacts with a multi-step interface:
-1.  **Select SQL File**: User picks a .sql file from the server. The backend's \`_get_schema_from_sql_file\` is called to parse it.
-2.  **Connect to PostgreSQL**: User provides PG connection details to fetch a list of databases and then tables.
-3.  **Map Data**: This is the core step.
-    -   Users can drag-and-drop source columns to target columns for a 'direct' mapping.
-    -   Clicking a target column opens a detailed mapping panel with advanced options:
-        -   **Transformation**: Create new values, e.g., by concatenating multiple source columns.
-        -   **Lookup**: Fetch a value from another table (source or target) based on a matching key.
-        -   **Static Value**: Hardcode a specific value for a column.
-        -   **Auto-Increment**: Create a sequence of numbers.
-    -   **Post-Processing**: After a value is determined, it can be further processed (e.g., casting to integer, reformatting a date).
-    -   **Fallback**: Define a default value to use if the primary mapping rule results in NULL.
-4.  **Run Migration**: User can choose to truncate target tables first and then execute the migration.
-5.  **Ask AI on Error**: If a row fails to migrate, an "Ask AI" button appears. This gives you, the AI, the exact error, query, and data to provide a precise solution.
-
-**YOUR TASK:**
-Answer user questions clearly and concisely. Refer to the functions and steps above. If a user has a problem, guide them on how to use the tool's features to solve it. For example, if they need to combine a first name and last name, tell them to use a 'Transformation' mapping with the 'CONCAT' function. Be helpful and specific.
+**Your Role:**
+* **Be direct and helpful.**
+* **Prioritize solutions using the tool's features.** For example, if a user asks to combine columns, tell them to use the "Transformation -> CONCAT" mapping.
+* **Keep answers simple and step-by-step.**
 `;
         }
-
+        
+        /**
+         * NEW, FOCUSED PROMPT specifically for analyzing migration errors.
+         */
         function getErrorAnalysisPrompt(errorDetails) {
             return `
-You are a database expert specializing in MySQL to PostgreSQL migrations. A user has encountered an error while using a migration tool. Your task is to analyze the error and provide a clear, actionable solution.
+You are a database expert specializing in MySQL-to-PostgreSQL migrations. A user's data migration failed for a specific row. Analyze the provided error and give a clear, actionable solution using the migration tool.
 
-**CONTEXT:**
-- The user is migrating data from a MySQL dump file to a PostgreSQL database.
-- The tool failed to insert a row and has provided the following details.
+**Error Details:**
+* **PostgreSQL Error:** ${errorDetails.error}
+* **Failing Query:** ${errorDetails.query}
+* **Problematic Data:** ${JSON.stringify(errorDetails.values)}
 
-**ERROR DETAILS:**
-- **PostgreSQL Error Message:** ${errorDetails.error}
-- **Failed Query:** ${errorDetails.query}
-- **Data Values for the Failed Row:** ${JSON.stringify(errorDetails.values)}
+**Instructions:**
+1.  **Identify the Root Cause:** What is the most likely reason for this error? (e.g., "data type mismatch", "date format incorrect", "value too long for column").
+2.  **Propose a Specific Fix:** Recommend the best feature in the migration tool to solve this.
+3.  **Provide Step-by-Step Guidance:** Give the user a numbered list of exact steps to take in the UI to apply your fix.
 
-**YOUR TASK:**
-1.  **Explain the Cause:** In simple terms, what is the most likely reason for this error? Look for data type mismatches, constraint violations, or syntax issues between MySQL and PostgreSQL.
-2.  **Propose a Solution:** Based on the error, recommend a specific fix using the migration tool's features. Be very specific. For example:
-    - "The error indicates a data type mismatch. The solution is to use the 'Post-Processing' feature to cast the problematic column to the correct type."
-    - "This looks like a date format issue. You should use the 'Re-format Date' option in the 'Post-Processing' section."
-3.  **Provide Step-by-Step Instructions:** Give the user a clear, numbered list of steps to follow in the tool to apply your recommended solution. For example:
-    1. In the mapping interface, find the target column that is causing the error.
-    2. Click on it to open the mapping panel.
-    3. In the 'Post-Processing' section, find the 'Change Data Type (Cast)' dropdown.
-    4. Select the appropriate data type (e.g., 'Integer') from the list.
-    5. Click 'Save Mapping' and try running the migration again.
+**Example Response Format:**
+**Cause:** The error "invalid input syntax for type integer" means you're trying to insert text into a number column.
+**Solution:** You need to cast the source column to an integer.
 
-Be direct, helpful, and focus on solving the user's problem with the tool's built-in capabilities.
+**Steps:**
+1.  In the mapping UI, find and click the target column that's causing the error.
+2.  In the panel that opens, go to the "Post-Processing" section.
+3.  Select "Integer" from the "Change Data Type (Cast)" dropdown.
+4.  Click "Save Mapping" and run the migration again.
 `;
         }
         
@@ -1911,7 +1913,8 @@ Be direct, helpful, and focus on solving the user's problem with the tool's buil
             setTimeout(() => modalOverlay.classList.add('visible'), 10);
             
             const prompt = getErrorAnalysisPrompt(errorDetails);
-            sendChatMessage(prompt, "Tell me about this error...");
+            // Pass a user-friendly message for display, but use the detailed prompt for the API call
+            sendChatMessage(prompt, "I have a migration error. Can you tell me how to fix it?");
         }
 
         async function sendChatMessage(prompt = null, userDisplayMessage = null) {
@@ -1937,10 +1940,11 @@ Be direct, helpful, and focus on solving the user's problem with the tool's buil
             history.appendChild(aiMessageDiv);
             history.scrollTop = history.scrollHeight;
 
+            // Use the specific prompt if provided, otherwise build the general one
             const fullPrompt = prompt || (getToolContext() + "\n\n---\n\nUser Question: " + userText);
             
             try {
-                const apiKey = "AIzaSyAVlRPQs2bwMTRw7oDOBC4cDDFmP7zIZkM";
+                const apiKey = "AIzaSyAVlRPQs2bwMTRw7oDOBC4cDDFmP7zIZkM"; // If you want to use models other than gemini-2.0-flash or imagen-3.0-generate-002, provide an API key here. Otherwise, leave this as-is.
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
                 
                 const requestPayload = {
@@ -1957,7 +1961,8 @@ Be direct, helpful, and focus on solving the user's problem with the tool's buil
                 });
 
                 if (!response.ok) {
-                    throw new Error(`API error: ${response.statusText}`);
+                    const errorData = await response.json();
+                    throw new Error(`API error: ${response.statusText} - ${errorData.error?.message}`);
                 }
 
                 const result = await response.json();
@@ -1968,44 +1973,49 @@ Be direct, helpful, and focus on solving the user's problem with the tool's buil
                     const aiText = result.candidates[0].content.parts[0].text;
                     aiMessageDiv.innerHTML = markdownToHtml(aiText);
                 } else {
-                    aiMessageDiv.textContent = "Sorry, I couldn't get a response. The API might have returned an empty result.";
+                    aiMessageDiv.textContent = "Sorry, I couldn't get a response. The API might have returned an empty result or the content was blocked.";
                 }
 
             } catch (error) {
                 console.error("AI Assistant Error:", error);
-                aiMessageDiv.textContent = "Sorry, I encountered an error. Please check the console for details.";
+                aiMessageDiv.textContent = `Sorry, I encountered an error. Please check the console for details. Error: ${error.message}`;
             }
 
             history.scrollTop = history.scrollHeight;
         }
         
         function markdownToHtml(md) {
-            // Basic Markdown to HTML conversion
-            let html = escapeHtml(md);
+            let html = md;
+
+            // Process code blocks first to preserve their content
+            html = html.replace(/```([\s\S]*?)```/g, (match, p1) => `<pre><code>${escapeHtml(p1.trim())}</code></pre>`);
             
             // Headers
             html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
             html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
             html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
 
-            // Bold
+            // Bold and Italic
             html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-            
-            // Italic
             html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
             
-            // Lists (simple implementation)
-            html = html.replace(/^\* (.*$)/gim, '<ul><li>$1</li></ul>');
-            html = html.replace(/<\/ul>\n<br><ul>/g, ''); // Merge consecutive list items
+            // Lists (more robustly)
+            html = html.replace(/^\s*[\-\*] (.*$)/gim, '<li>$1</li>');
+            html = html.replace(/^\s*\d+\. (.*$)/gim, '<li>$1</li>');
+            html = html.replace(/<\/li>\n<li>/g, '</li><li>'); // Join list items
+            html = html.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>'); // Wrap in <ul>
+            html = html.replace(/<\/ul>\s*<ul>/g, ''); // Merge adjacent lists
 
-            // Code blocks
-            html = html.replace(/```(.*?)```/gs, (match, p1) => `<pre><code>${escapeHtml(p1.trim())}</code></pre>`);
-            
             // Inline code
             html = html.replace(/`(.*?)`/g, '<code>$1</code>');
 
-            // Newlines
+            // Newlines to <br>
             html = html.replace(/\n/g, '<br>');
+            // Remove <br> inside lists and after headers
+            html = html.replace(/<br\s*\/?>\s*<(ul|h1|h2|h3)>/g, '<$1>');
+            html = html.replace(/<(ul|li)><br\s*\/?>/g, '<$1>');
+            html = html.replace(/<\/(ul|li)><br\s*\/?>/g, '</$1>');
+
 
             return html;
         }
