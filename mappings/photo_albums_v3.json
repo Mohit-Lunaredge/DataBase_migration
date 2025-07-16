@@ -1,0 +1,40 @@
+{
+    "photo_albums": {
+        "created_at": {
+            "source_table": "album",
+            "type": "static",
+            "value": "Mon, 14 Jul 2025 06:08:30 GMT"
+        },
+        "department_id": {
+            "type": "target_lookup",
+            "source_table": "album",
+            "match_col": "department",
+            "default": "",
+            "steps": [
+                {
+                    "lookup_table": "departments",
+                    "where_col": "name",
+                    "get_col": "id"
+                }
+            ]
+        },
+        "cell_id": {
+            "type": "target_lookup",
+            "source_table": "album",
+            "match_col": "department",
+            "default": "",
+            "steps": [
+                {
+                    "lookup_table": "Cells",
+                    "where_col": "name",
+                    "get_col": "id"
+                }
+            ]
+        },
+        "name": {
+            "type": "direct",
+            "value": "name",
+            "source_table": "album"
+        }
+    }
+}

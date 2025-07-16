@@ -1,0 +1,36 @@
+{
+    "hod_question_bank": {
+        "date": {
+            "type": "direct",
+            "value": "date",
+            "source_table": "question"
+        },
+        "edate": {
+            "type": "direct",
+            "value": "edate",
+            "source_table": "question"
+        },
+        "link_to_pdf": {
+            "type": "direct",
+            "value": "link",
+            "source_table": "question"
+        },
+        "title": {
+            "type": "direct",
+            "value": "title",
+            "source_table": "question"
+        },
+        "userId": {
+            "type": "conditional_target_lookup",
+            "match_col": "dep",
+            "default": "",
+            "conditions": [
+                {
+                    "lookup_table": "departments",
+                    "where_col": "name",
+                    "get_col": "user_id"
+                }
+            ]
+        }
+    }
+}

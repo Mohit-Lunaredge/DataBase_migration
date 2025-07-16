@@ -1,0 +1,117 @@
+{
+    "circulars": {
+        "main_category_id": {
+            "type": "direct",
+            "value": "category",
+            "source_table": "circulars",
+            "on_null": {
+                "type": "static",
+                "value": "1"
+            }
+        },
+        "category_id": {
+            "type": "direct",
+            "value": "front",
+            "source_table": "circulars"
+        },
+        "title": {
+            "type": "direct",
+            "value": "title",
+            "source_table": "circulars"
+        },
+        "content": {
+            "type": "direct",
+            "value": "link",
+            "source_table": "circulars",
+            "on_null": {
+                "type": "static",
+                "value": "#"
+            }
+        },
+        "date": {
+            "type": "direct",
+            "value": "date",
+            "source_table": "circulars"
+        },
+        "sno": {
+            "type": "direct",
+            "value": "sno",
+            "source_table": "circulars"
+        },
+        "circular_from": {
+            "type": "conditional_target_lookup",
+            "match_col": "category",
+            "default": "",
+            "conditions": [
+                {
+                    "lookup_table": "departments",
+                    "where_col": "name",
+                    "set_static_value": "Department"
+                },
+                {
+                    "lookup_table": "Cells",
+                    "where_col": "name",
+                    "set_static_value": "Cell"
+                }
+            ]
+        },
+        "reference_id": {
+            "type": "conditional_target_lookup",
+            "match_col": "department",
+            "default": "",
+            "conditions": [
+                {
+                    "lookup_table": "Cells",
+                    "where_col": "name",
+                    "get_col": "id"
+                },
+                {
+                    "lookup_table": "departments",
+                    "where_col": "name",
+                    "get_col": "id"
+                }
+            ],
+            "on_null": {
+                "type": "static",
+                "value": "1"
+            }
+        },
+        "user_id": {
+            "type": "conditional_target_lookup",
+            "match_col": "department",
+            "default": "",
+            "conditions": [
+                {
+                    "lookup_table": "Cells",
+                    "where_col": "name",
+                    "get_col": "user_id"
+                },
+                {
+                    "lookup_table": "departments",
+                    "where_col": "name",
+                    "get_col": "user_id"
+                }
+            ]
+        },
+        "show_on_front": {
+            "type": "static",
+            "value": "False"
+        },
+        "requested_for_front": {
+            "type": "static",
+            "value": "False"
+        },
+        "created_at": {
+            "type": "static",
+            "value": "2025-07-15T11:50:12+00:00"
+        },
+        "updated_at": {
+            "type": "static",
+            "value": "2025-07-15T11:50:12+00:00"
+        },
+        "content_type": {
+            "type": "static",
+            "value": "link"
+        }
+    }
+}

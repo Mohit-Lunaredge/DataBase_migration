@@ -1,0 +1,48 @@
+{
+    "circulars": {
+        "show_on_front": {
+            "type": "static",
+            "value": "True"
+        },
+        "category_id": {
+            "type": "direct",
+            "value": "type",
+            "source_table": "front"
+        },
+        "main_category_id": {
+            "type": "static",
+            "value": "1"
+        },
+        "date": {
+            "type": "direct",
+            "value": "date",
+            "source_table": "front"
+        },
+        "title": {
+            "type": "direct",
+            "value": "title",
+            "source_table": "front"
+        },
+        "content": {
+            "type": "direct",
+            "value": "link",
+            "source_table": "front"
+        },
+        "content_type": {
+            "type": "static",
+            "value": "pdf"
+        },
+        "circular_from": {
+            "type": "static",
+            "value": "admin"
+        },
+        "created_at": {
+            "type": "static",
+            "value": "2025-07-16T12:59:55+00:00"
+        },
+        "updated_at": {
+            "type": "static",
+            "value": "2025-07-16T12:59:55+00:00"
+        }
+    }
+}

@@ -1,3 +1,4 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,8 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { 
-            font-family: 'Inter', sans-serif; 
+        body {
+            font-family: 'Inter', sans-serif;
             background-color: #f3f4f6;
         }
         .card {
@@ -208,6 +209,22 @@
             margin-left: 8px;
             cursor: pointer;
         }
+        #ai-chat-mode-indicator {
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            margin-right: auto;
+            transition: all 0.3s;
+        }
+        .mode-qa {
+            background-color: #e0e7ff;
+            color: #4338ca;
+        }
+        .mode-mapping {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -217,7 +234,7 @@
             <h1 class="text-3xl md:text-4xl font-bold text-gray-900">MySQL to PostgreSQL Migration Assistant</h1>
             <p class="text-md text-gray-600 mt-2">A powerful tool to streamline your database migration workflow.</p>
         </header>
-        
+
         <div id="status-area" class="mb-4 p-4 text-center rounded-md hidden"></div>
 
         <!-- Saved Mappings Section -->
@@ -265,7 +282,7 @@
             </div>
             <button id="fetchDatabasesButton" type="button" class="mt-4 btn btn-secondary">Connect & Fetch Databases</button>
         </div>
-        
+
         <!-- Step 2b: Select Database -->
         <div id="step2b-db-select" class="card hidden">
             <h3 class="text-xl font-semibold mb-2">Select Target Database</h3>
@@ -334,7 +351,7 @@
         </div>
 
     </div>
-    
+
     <!-- Modals -->
     <div id="settings-modal" class="modal-overlay">
         <div id="settings-modal-content" class="modal-content"></div>
@@ -348,21 +365,20 @@
 
     <!-- AI Assistant -->
     <button id="ai-assistant-button">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M10 2a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 2zM5.05 5.05a.75.75 0 011.06 0l1.06 1.06a.75.75 0 01-1.06 1.06l-1.06-1.06a.75.75 0 010-1.06zM13.89 6.11a.75.75 0 011.06-1.06l1.06 1.06a.75.75 0 01-1.06 1.06l-1.06-1.06zM18 10a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0118 10zM14.95 14.95a.75.75 0 01-1.06 0l-1.06-1.06a.75.75 0 011.06-1.06l1.06 1.06a.75.75 0 010 1.06zM6.11 13.89a.75.75 0 01-1.06 1.06l-1.06-1.06a.75.75 0 111.06-1.06l1.06 1.06zM2 10a.75.75 0 01-.75-.75v-1.5a.75.75 0 011.5 0v1.5A.75.75 0 012 10zM10 18a.75.75 0 01-.75-.75v-1.5a.75.75 0 011.5 0v1.5A.75.75 0 0110 18zM10 15a5 5 0 100-10 5 5 0 000 10z" clip-rule="evenodd" />
-        </svg>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M10 2a8 8 0 1 0 5.656 13.656L18.828 18.83A1 1 0 0 1 17.414 20.243l-3.172-3.172A7.96 7.96 0 0 0 10 18a8 8 0 0 0-8-8zm5 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm-3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm-2 4a1 1 0 1 0 0 2h4a1 1 0 1 0 0-2h-4z" clip-rule="evenodd"/></svg>
     </button>
     <div id="ai-chat-modal-overlay" class="modal-overlay hidden">
         <div id="ai-chat-modal">
             <div id="ai-chat-header">
+                <span id="ai-chat-mode-indicator"></span>
                 <span>AI Migration Assistant</span>
                 <button id="ai-chat-close" class="font-bold text-xl">&times;</button>
             </div>
             <div id="ai-chat-history">
-                <div class="ai-message">Hello! I'm your migration assistant. How can I help you with this tool?</div>
+                <div class="ai-message">Hello! I'm your migration assistant. How can I help you? Once you load both schemas, I can help you create mappings automatically.</div>
             </div>
             <div id="ai-chat-input-container">
-                <input type="text" id="ai-chat-input" placeholder="Ask a question...">
+                <input type="text" id="ai-chat-input" placeholder="Ask a question or describe a mapping...">
                 <button id="ai-chat-send" class="btn btn-primary">Send</button>
             </div>
         </div>
@@ -393,6 +409,7 @@
             // AI Assistant Listeners
             document.getElementById('ai-assistant-button').addEventListener('click', () => {
                 const modalOverlay = document.getElementById('ai-chat-modal-overlay');
+                updateAiChatMode();
                 modalOverlay.classList.remove('hidden');
                 setTimeout(() => modalOverlay.classList.add('visible'), 10);
             });
@@ -407,7 +424,7 @@
                     sendChatMessage();
                 }
             });
-            
+
             // Listener for error text selection
             document.body.addEventListener('click', (e) => {
                 const askAiButton = document.getElementById('ask-ai-on-selection');
@@ -430,7 +447,7 @@
                     document.body.appendChild(newButton);
                     newButton.style.left = `${e.pageX}px`;
                     newButton.style.top = `${e.pageY + 5}px`;
-                    
+
                     const errorDetailsDiv = e.target.closest('.error-details');
                     const errorJson = errorDetailsDiv.dataset.errorJson;
 
@@ -464,7 +481,7 @@
                 const customPathInput = document.getElementById('sqlFilePathInput');
                 customPathInput.classList.toggle('hidden', selector.value !== 'custom');
             };
-            loadSavedMappings(); 
+            loadSavedMappings();
         }
 
         // --- Status Update Function ---
@@ -622,7 +639,7 @@
                                 const errorJson = escapeHtml(JSON.stringify(err));
                                 summaryHtml += `
                                     <div class="error-details mt-2" data-error-json='${errorJson}'>
-                                        <div><strong>Error:</strong> ${escapeHtml(err.error)} 
+                                        <div><strong>Error:</strong> ${escapeHtml(err.error)}
                                             <button class="ask-ai-btn" onclick='askAiAboutError(${errorJson})'>Ask AI</button>
                                         </div>
                                         <div class="mt-1"><strong>Query:</strong> <pre>${escapeHtml(err.query)}</pre></div>
@@ -724,6 +741,7 @@
             dropdownContainer.appendChild(dropdownButton);
             dropdownContainer.appendChild(dropdownPanel);
             container.appendChild(dropdownContainer);
+            changeHandler(); // Initial call to set visibility
         }
 
         function updateSourceTableVisibility() {
@@ -761,7 +779,7 @@
             if (type === 'mysql') {
                 const btnGroup = document.createElement('div');
                 btnGroup.className = 'flex items-center space-x-2';
-                
+
                 const viewBtn = document.createElement('button');
                 viewBtn.type = 'button';
                 viewBtn.innerHTML = `<svg class="w-5 h-5 text-gray-500 hover:text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>`;
@@ -841,7 +859,7 @@
 
             if (!mappingRules[pgTable]) mappingRules[pgTable] = {};
             mappingRules[pgTable][pgCol] = { type: 'direct', value: mysqlCol, source_table: mysqlTable };
-            
+
             document.querySelector(`#mysql-table-filter input[value="${mysqlTable}"]`).checked = true;
             document.querySelector(`#pg-table-filter input[value="${pgTable}"]`).checked = true;
             updateSourceTableVisibility();
@@ -860,7 +878,7 @@
                 for (const pgCol in mappingRules[pgTable]) {
                     const rule = mappingRules[pgTable][pgCol];
                     let shouldDelete = false;
-                    
+
                     if (rule.type === 'direct' && rule.source_table === mysqlTable && rule.value === mysqlCol) {
                         shouldDelete = true;
                     } else if (rule.type === 'transformation' && rule.source_table === mysqlTable && rule.params && rule.params.parts) {
@@ -889,6 +907,9 @@
                 if (rule.source_table) {
                     sourceTables.add(rule.source_table);
                 }
+                 if (rule.type === 'lookup' && rule.lookup_source_table) {
+                    sourceTables.add(rule.lookup_source_table);
+                }
                 if (rule.type === 'transformation' && rule.params && rule.params.parts) {
                     rule.params.parts.forEach(part => {
                         if (part.type === 'column' && rule.source_table) {
@@ -903,12 +924,12 @@
         function updateColumnUIs() {
             document.querySelectorAll('.mapping-info-badge').forEach(b => b.remove());
             document.querySelectorAll('.mapped, .mapped-target').forEach(el => el.classList.remove('mapped', 'mapped-target'));
-            
+
             for(const pgTable in mappingRules) {
                 for(const pgCol in mappingRules[pgTable]) {
                     const rule = mappingRules[pgTable][pgCol];
                     const targetEl = document.getElementById(`pg-${pgTable}-${pgCol}`);
-                    if (!targetEl) continue;
+                    if (!targetEl || !rule || !rule.type) continue; // FIX: Add check for rule and rule.type
 
                     let badgeText = `[${rule.type.toUpperCase()}]`;
                     if(rule.type === 'direct') {
@@ -929,13 +950,13 @@
                                 }
                             });
                         }
-                    } else if (rule.type === 'lookup' || rule.type === 'target_lookup' || rule.type === 'basic_target_lookup') {
-                        badgeText = rule.type.includes('target') ? `[T-LOOKUP]` : `[S-LOOKUP]`;
-                        const sourceTables = findSourceTablesForTarget(pgTable).length > 0 ? findSourceTablesForTarget(pgTable) : Object.keys(mysqlSchemaData);
-                        sourceTables.forEach(tableName => {
-                            const sourceEl = document.getElementById(`mysql-${tableName}-${rule.match_col}`);
+                    } else if (['lookup', 'target_lookup', 'basic_target_lookup', 'conditional_target_lookup', 'conditional_source_lookup'].includes(rule.type)) {
+                        badgeText = `[${rule.type.replace(/_/g, ' ').toUpperCase()}]`;
+                         const sourceTable = rule.source_table || findSourceTablesForTarget(pgTable)[0];
+                         if (sourceTable && rule.match_col) {
+                            const sourceEl = document.getElementById(`mysql-${sourceTable}-${rule.match_col}`);
                             if (sourceEl) sourceEl.classList.add('mapped');
-                        });
+                         }
                     } else if (rule.type === 'group_and_aggregate') {
                         badgeText = `[AGG]`;
                         const sourceEl = document.getElementById(`mysql-${rule.source_table}-${rule.group_by_column}`);
@@ -997,11 +1018,11 @@
                                 drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${part.value}`));
                             }
                         });
-                    } else if (rule.type === 'lookup' || rule.type === 'target_lookup' || rule.type === 'basic_target_lookup') {
-                        const sourceTables = findSourceTablesForTarget(pgTable).length > 0 ? findSourceTablesForTarget(pgTable) : Object.keys(mysqlSchemaData);
-                        sourceTables.forEach(tableName => {
-                            drawLineFromSource(document.getElementById(`mysql-${tableName}-${rule.match_col}`));
-                        });
+                    } else if (['lookup', 'target_lookup', 'basic_target_lookup', 'conditional_target_lookup', 'conditional_source_lookup'].includes(rule.type)) {
+                        const sourceTable = rule.source_table || findSourceTablesForTarget(pgTable)[0];
+                        if(sourceTable && rule.match_col) {
+                           drawLineFromSource(document.getElementById(`mysql-${sourceTable}-${rule.match_col}`));
+                        }
                     } else if (rule.type === 'group_and_aggregate') {
                         drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${rule.group_by_column}`));
                         drawLineFromSource(document.getElementById(`mysql-${rule.source_table}-${rule.aggregate_column}`));
@@ -1028,14 +1049,16 @@
                         <option value="transformation">Transformation (e.g., CONCAT)</option>
                         <option value="group_and_aggregate">Group and Aggregate to Array</option>
                         <option value="lookup">Lookup from another Source Table</option>
+                        <option value="conditional_source_lookup">Conditional Source Lookup</option>
                         <option value="target_lookup">Lookup from Target DB Table</option>
+                        <option value="conditional_target_lookup">Conditional Target Lookup</option>
                         <option value="basic_target_lookup">Basic Target Lookup (Direct Query)</option>
                         <option value="static">Static Value</option>
                         <option value="auto-increment">Auto-Increment</option>
                     </select>
                 </div>
                 <div id="mapping-options" class="space-y-4 border-t pt-4"></div>
-                
+
                 <!-- Post-Processing Transformations -->
                 <div id="post-processing-container" class="mt-6 border-t pt-4">
                     <h3 class="font-semibold text-lg mb-2">Post-Processing</h3>
@@ -1095,7 +1118,7 @@
                 const type = typeSelector.value;
                 const isFallbackDisabled = ['static', 'auto-increment', 'none'].includes(type);
                 const isPostProcessingDisabled = ['group_and_aggregate', 'none'].includes(type);
-                
+
                 document.getElementById('fallback-container').style.display = isFallbackDisabled ? 'none' : 'block';
                 document.getElementById('post-processing-container').style.display = isPostProcessingDisabled ? 'none' : 'block';
 
@@ -1137,8 +1160,8 @@
             const currentRule = mappingRules[pgTable]?.[pgCol] || {};
             let html = '';
 
-            const createSelect = (id, label, options) => `<div><label class="block font-semibold text-sm mb-1">${label}</label><select id="${id}" class="w-full p-2 border border-gray-300 rounded-md">${options}</select></div>`;
-            const createInput = (id, label, value, type='text') => `<div><label class="block font-semibold text-sm mb-1">${label}</label><input type="${type}" id="${id}" class="w-full p-2 border border-gray-300 rounded-md" value="${escapeHtml(value)}"></div>`;
+            const createSelect = (id, label, options, extraClasses = '') => `<div><label class="block font-semibold text-sm mb-1">${label}</label><select id="${id}" class="w-full p-2 border border-gray-300 rounded-md ${extraClasses}">${options}</select></div>`;
+            const createInput = (id, label, value, type='text', extraClasses = '') => `<div><label class="block font-semibold text-sm mb-1">${label}</label><input type="${type}" id="${id}" class="w-full p-2 border border-gray-300 rounded-md ${extraClasses}" value="${escapeHtml(value)}"></div>`;
 
             if (type === 'direct') {
                 let allSourceCols = '';
@@ -1191,6 +1214,28 @@
                             ${createInput('lookup-default-val', 'Default value if not found (optional)', currentRule.default || '')}
                         `;
                 }
+            } else if (type === 'conditional_target_lookup' || type === 'conditional_source_lookup') {
+                const isSourceConditional = type === 'conditional_source_lookup';
+                const lookupType = isSourceConditional ? 'source' : 'target';
+                const lookupLabel = isSourceConditional ? 'Source (MySQL)' : 'Target (PostgreSQL)';
+
+                let matchColOptions = '';
+                const sourceTablesInvolved = findSourceTablesForTarget(pgTable).length > 0 ? findSourceTablesForTarget(pgTable) : Object.keys(mysqlSchemaData);
+                const uniqueColNames = new Set();
+                sourceTablesInvolved.forEach(tableName => {
+                    mysqlSchemaData[tableName]?.columns.forEach(col => uniqueColNames.add(col.name));
+                });
+                Array.from(uniqueColNames).sort().forEach(colName => {
+                    matchColOptions += `<option value="${colName}">${colName}</option>`;
+                });
+                html = `
+                    <p class="text-sm font-bold text-gray-700">This rule checks conditions against the ${lookupLabel} DB in order and stops at the first match.</p>
+                    ${createSelect('lookup-match-col', 'Match using this column from the source row.', matchColOptions)}
+                    <div id="conditional-rules-container" class="space-y-3 border-t pt-3 mt-3"></div>
+                    <button type="button" onclick="addConditionalRule('${lookupType}')" class="text-sm text-blue-600 hover:underline mt-2">+ Add Condition</button>
+                    <hr class="my-4">
+                    ${createInput('lookup-default-val', 'Default value if no conditions match (optional)', currentRule.default || '')}
+                `;
             } else if (type === 'transformation') {
                 const tableOptions = Object.keys(mysqlSchemaData).sort().map(t => `<option value="${t}">${t}</option>`).join('');
                 html = createSelect('transform-source-table', 'Source Table for Transformation', tableOptions);
@@ -1226,10 +1271,15 @@
                 lookupTableSelect.onchange = updateLookupCols;
                 if(currentRule.lookup_table || currentRule.lookup_source_table) lookupTableSelect.value = currentRule.lookup_table || currentRule.lookup_source_table;
                 updateLookupCols();
-                
+
                 if(currentRule.get_col) getColSelect.value = currentRule.get_col;
                 if(currentRule.where_col) whereColSelect.value = currentRule.where_col;
                 if(currentRule.match_col) matchColSelect.value = currentRule.match_col;
+            } else if (type === 'conditional_target_lookup' || type === 'conditional_source_lookup') {
+                const isSourceConditional = type === 'conditional_source_lookup';
+                const lookupType = isSourceConditional ? 'source' : 'target';
+                if(currentRule.match_col) document.getElementById('lookup-match-col').value = currentRule.match_col;
+                renderConditionalRules(currentRule.conditions, lookupType);
             } else if (type === 'transformation') {
                 const tableSelect = document.getElementById('transform-source-table');
                 const functionSelect = document.getElementById('transform-function');
@@ -1242,8 +1292,8 @@
                             <button type="button" onclick="addConcatPart()" class="text-xs text-blue-600 hover:underline">+ Add Part</button>
                         `;
                         const parts = currentRule.params?.parts || [
-                            { type: 'column', value: '' }, 
-                            { type: 'separator', value: ' ' }, 
+                            { type: 'column', value: '' },
+                            { type: 'separator', value: ' ' },
                             { type: 'column', value: '' }
                         ];
                         renderConcatParts(parts);
@@ -1276,7 +1326,7 @@
                 renderAggregateParams();
             }
         }
-        
+
         // --- CONCAT Builder Functions ---
         function renderConcatParts(parts) {
             const container = document.getElementById('concat-parts-container');
@@ -1301,7 +1351,7 @@
                 `;
                 partDiv.innerHTML = partHtml;
                 container.appendChild(partDiv);
-                
+
                 const valueContainer = partDiv.querySelector('.part-value-container');
                 renderConcatPartValueInput(valueContainer, part, colOptions);
             });
@@ -1374,6 +1424,111 @@
             return parts;
         }
 
+        // --- Conditional Lookup UI Functions (Generalized) ---
+        function addConditionalRule(lookupType) {
+            const conditions = readConditionalRulesFromUI();
+            conditions.push({lookup_table: '', where_col: '', get_col: '', set_static_value: ''});
+            renderConditionalRules(conditions, lookupType);
+        }
+
+        function removeConditionalRule(button) {
+            const lookupType = button.dataset.lookupType;
+            const index = parseInt(button.dataset.index, 10);
+            const conditions = readConditionalRulesFromUI();
+            conditions.splice(index, 1);
+            renderConditionalRules(conditions, lookupType);
+        }
+
+        function renderConditionalRules(conditions = [], lookupType = 'target') {
+            const container = document.getElementById('conditional-rules-container');
+            container.innerHTML = '<h4 class="font-semibold text-gray-800">Conditions (checked in order):</h4>'; // Reset
+            if (!conditions || conditions.length === 0) {
+                 conditions = [{lookup_table: '', where_col: '', get_col: '', set_static_value: ''}];
+            }
+
+            const schema = lookupType === 'source' ? mysqlSchemaData : postgresSchemaData;
+            const lookupTableOptions = Object.keys(schema).sort().map(t => `<option value="${t}">${t}</option>`).join('');
+
+            conditions.forEach((cond, index) => {
+                const ruleDiv = document.createElement('div');
+                ruleDiv.className = 'p-3 border rounded-md bg-gray-50 space-y-2 relative';
+                const isGetCol = !('set_static_value' in cond) || ('get_col' in cond);
+
+                ruleDiv.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <select class="w-full p-1 border border-gray-300 rounded-md text-sm cond-lookup-table" onchange="updateConditionalColumnOptions(this, '${lookupType}')">
+                            <option value="">-- Select Lookup Table --</option>
+                            ${lookupTableOptions}
+                        </select>
+                        <select class="w-full p-1 border border-gray-300 rounded-md text-sm cond-where-col"><option value="">-- Where Column --</option></select>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <label class="flex items-center"><input type="radio" name="result-type-${index}" value="get_col" class="cond-result-type" onchange="toggleConditionalResultInput(this)" ${isGetCol ? 'checked' : ''}> <span class="ml-1 text-sm">Get Column</span></label>
+                        <label class="flex items-center"><input type="radio" name="result-type-${index}" value="set_static_value" class="cond-result-type" onchange="toggleConditionalResultInput(this)" ${!isGetCol ? 'checked' : ''}> <span class="ml-1 text-sm">Set Static Value</span></label>
+                    </div>
+                    <div class="cond-result-container">
+                        <select class="w-full p-1 border border-gray-300 rounded-md text-sm cond-get-col"><option value="">-- Get Column --</option></select>
+                        <input type="text" class="w-full p-1 border border-gray-300 rounded-md text-sm cond-static-val hidden" placeholder="Static Value">
+                    </div>
+                    <button type="button" data-index="${index}" data-lookup-type="${lookupType}" onclick="removeConditionalRule(this)" class="absolute top-1 right-1 text-red-500 hover:text-red-700 font-bold">&times;</button>
+                `;
+                container.appendChild(ruleDiv);
+
+                const tableSelect = ruleDiv.querySelector('.cond-lookup-table');
+                tableSelect.value = cond.lookup_table || '';
+                updateConditionalColumnOptions(tableSelect, lookupType, cond.where_col, cond.get_col);
+
+                const staticInput = ruleDiv.querySelector('.cond-static-val');
+                staticInput.value = cond.set_static_value || '';
+
+                toggleConditionalResultInput(ruleDiv.querySelector('.cond-result-type:checked'));
+            });
+        }
+
+        function updateConditionalColumnOptions(tableSelect, lookupType, selectedWhere, selectedGet) {
+            const ruleDiv = tableSelect.closest('.p-3');
+            const whereSelect = ruleDiv.querySelector('.cond-where-col');
+            const getSelect = ruleDiv.querySelector('.cond-get-col');
+            const selectedTable = tableSelect.value;
+            const schema = lookupType === 'source' ? mysqlSchemaData : postgresSchemaData;
+            const columns = schema[selectedTable]?.columns || [];
+            const options = columns.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+            whereSelect.innerHTML = `<option value="">-- Where Column --</option>${options}`;
+            getSelect.innerHTML = `<option value="">-- Get Column --</option>${options}`;
+            if (selectedWhere) whereSelect.value = selectedWhere;
+            if (selectedGet) getSelect.value = selectedGet;
+        }
+
+        function toggleConditionalResultInput(radio) {
+            const ruleDiv = radio.closest('.p-3');
+            const getSelect = ruleDiv.querySelector('.cond-get-col');
+            const staticInput = ruleDiv.querySelector('.cond-static-val');
+            getSelect.classList.toggle('hidden', radio.value !== 'get_col');
+            staticInput.classList.toggle('hidden', radio.value !== 'set_static_value');
+        }
+
+        function readConditionalRulesFromUI() {
+            const conditions = [];
+            document.querySelectorAll('#conditional-rules-container > div').forEach(ruleDiv => {
+                const resultType = ruleDiv.querySelector('.cond-result-type:checked').value;
+                const condition = {
+                    lookup_table: ruleDiv.querySelector('.cond-lookup-table').value,
+                    where_col: ruleDiv.querySelector('.cond-where-col').value,
+                };
+
+                if (resultType === 'get_col') {
+                    condition.get_col = ruleDiv.querySelector('.cond-get-col').value;
+                } else { // set_static_value
+                    condition.set_static_value = ruleDiv.querySelector('.cond-static-val').value;
+                }
+                
+                if (condition.lookup_table && condition.where_col) {
+                     conditions.push(condition);
+                }
+            });
+            return conditions;
+        }
+
 
         function renderFallbackOptions(currentFallbackRule = {}) {
             const container = document.getElementById('fallback-options');
@@ -1411,9 +1566,9 @@
                 }
             } else {
                 let newRule = { type };
-                
+
                 const isRoleIdColumn = pgCol.toLowerCase() === 'role_id';
-                
+
                 if (type === 'direct') {
                     const selectedOption = document.getElementById('direct-source-col').selectedOptions[0];
                     newRule.value = selectedOption.value;
@@ -1437,7 +1592,7 @@
                 } else if (type === 'lookup' || type === 'target_lookup' || type === 'basic_target_lookup') {
                     if (type === 'lookup') newRule.lookup_source_table = document.getElementById('lookup-table').value;
                     else newRule.lookup_table = document.getElementById('lookup-table').value;
-                    
+
                     newRule.get_col = document.getElementById('lookup-get-col').value;
                     newRule.match_col = document.getElementById('lookup-match-col').value;
                     newRule.default = document.getElementById('lookup-default-val').value;
@@ -1451,6 +1606,10 @@
                     if (isRoleIdColumn && newRule.default) {
                         newRule.default = convertRoleToInt(newRule.default);
                     }
+                } else if (type === 'conditional_target_lookup' || type === 'conditional_source_lookup') {
+                    newRule.match_col = document.getElementById('lookup-match-col').value;
+                    newRule.default = document.getElementById('lookup-default-val').value;
+                    newRule.conditions = readConditionalRulesFromUI();
                 }
 
                 // --- Save Post-Processing and Fallback Rules ---
@@ -1529,9 +1688,9 @@
             });
             html += `</div></div>`;
             html += `<div class="flex justify-end space-x-4 mt-6"><button type="button" onclick="closeSettingsModal()" class="btn btn-tertiary">Cancel</button><button type="button" onclick="saveSettings('${tableName}')" class="btn btn-primary">Save Settings</button></div>`;
-            
+
             content.innerHTML = html;
-            
+
             renderFilterRules(tableName);
 
             if (tableFilters.replacements) {
@@ -1540,7 +1699,7 @@
                 }
             }
         }
-        
+
         function renderFilterRules(tableName) {
             const container = document.getElementById('filter-rules-container');
             container.innerHTML = '';
@@ -1556,7 +1715,7 @@
             const container = document.getElementById('filter-rules-container');
             const ruleDiv = document.createElement('div');
             ruleDiv.className = 'flex items-center space-x-2';
-            
+
             const colOptions = mysqlSchemaData[tableName].columns.map(c => `<option value="${c.name}" ${rule.column === c.name ? 'selected' : ''}>${c.name}</option>`).join('');
             const opOptions = ['=', '!=', 'LIKE', 'NOT LIKE', 'REGEXP', 'NOT REGEXP'].map(op => `<option value="${op}" ${rule.op === op ? 'selected' : ''}>${op}</option>`).join('');
 
@@ -1597,7 +1756,7 @@
             } else {
                 delete migrationFilters[tableName].sort;
             }
-            
+
             const whereRules = [];
             document.querySelectorAll('#filter-rules-container > div').forEach(ruleDiv => {
                 const column = ruleDiv.querySelector('.filter-column').value;
@@ -1634,7 +1793,7 @@
             setTimeout(() => modal.classList.add('visible'), 10);
             const content = document.getElementById('data-preview-content');
             content.innerHTML = `<h2 class="text-2xl font-bold mb-4">Previewing ${tableName}.${columnName}</h2><p>Loading data...</p>`;
-            
+
             const selector = document.getElementById('sqlFileSelector');
             const customPathInput = document.getElementById('sqlFilePathInput');
             let payload = {};
@@ -1656,7 +1815,7 @@
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Failed to fetch column data.');
-                
+
                 let listHtml = `<p class="text-sm text-gray-600 mb-2">Showing ${data.unique_values.length} unique values (out of ${data.total_rows} total rows).</p>`;
                 listHtml += '<ul class="data-preview-list border rounded-md p-2 bg-gray-50">';
                 if (data.unique_values.length === 0) {
@@ -1667,7 +1826,7 @@
                     });
                 }
                 listHtml += '</ul>';
-                
+
                 content.innerHTML = `
                     <div class="flex justify-between items-start">
                         <h2 class="text-2xl font-bold mb-4">Previewing ${tableName}.${columnName}</h2>
@@ -1799,7 +1958,7 @@
                 if (!response.ok) throw new Error(loadedRules.error || 'Failed to load mapping.');
 
                 mappingRules = loadedRules;
-                
+
                 const sourceTablesToDisplay = new Set();
                 const targetTablesToDisplay = new Set();
                 for (const pgTable in mappingRules) {
@@ -1821,10 +1980,10 @@
                 document.querySelectorAll('#pg-table-filter input[type="checkbox"]').forEach(cb => {
                     cb.checked = targetTablesToDisplay.has(cb.value);
                 });
-                
+
                 updateSourceTableVisibility();
                 updateTargetTableVisibility();
-                
+
                 setTimeout(() => {
                     updateColumnUIs();
                     showStatus(`Mapping '${mappingName}' loaded successfully.`, false);
@@ -1834,7 +1993,7 @@
                 handleFetchError(error, 'loading selected mapping');
             }
         }
-        
+
         function closeSettingsModal() {
             const modal = document.getElementById('settings-modal');
             modal.classList.remove('visible');
@@ -1852,10 +2011,19 @@
         }
 
         // --- AI Assistant Logic ---
-        
-        /**
-         * REFINED PROMPT for general questions. It's shorter and prioritizes key features.
-         */
+
+        function updateAiChatMode() {
+            const indicator = document.getElementById('ai-chat-mode-indicator');
+            const schemasLoaded = Object.keys(mysqlSchemaData).length > 0 && Object.keys(postgresSchemaData).length > 0;
+            if (schemasLoaded) {
+                indicator.textContent = 'Mapping Mode';
+                indicator.className = 'mode-mapping';
+            } else {
+                indicator.textContent = 'Q&A Mode';
+                indicator.className = 'mode-qa';
+            }
+        }
+
         function getToolContext() {
             return `
 You are an expert AI assistant for a "MySQL to PostgreSQL Migration Tool". Your goal is to help users by providing clear, concise answers about how to use the tool.
@@ -1866,10 +2034,12 @@ You are an expert AI assistant for a "MySQL to PostgreSQL Migration Tool". Your 
 3.  **Advanced Mapping (Panel):** Clicking a target column opens a panel with powerful options:
     * **Transformation:** Create new values (e.g., \`CONCAT\` to merge 'first_name' and 'last_name').
     * **Lookup:** Fetch data from another table (e.g., get a \`user_id\` from a \`users\` table).
+    * **Conditional Source/Target Lookup:** A powerful rule that checks multiple conditions in order against either the source or target DB. For example, "Try to find a matching 'name' in the 'department' table. If not found, try to find it in the 'cell' table." This can be used to get a value OR to set a static value based on the match.
     * **Static Value:** Set a fixed value for a column (e.g., always set a status to 'active').
     * **Post-Processing:** Change data types (\`Cast\`) or re-format dates after getting a value.
     * **Fallback:** Set a default value if the main mapping rule finds nothing (is null).
 4.  **Error Handling:** If a row fails, an "Ask AI" button appears, which gives you specific error details to debug.
+5.  **AI Mapping Mode:** Once schemas are loaded, you can describe mappings in chat, and the AI will generate the rules.
 
 **Your Role:**
 * **Be direct and helpful.**
@@ -1878,9 +2048,36 @@ You are an expert AI assistant for a "MySQL to PostgreSQL Migration Tool". Your 
 `;
         }
         
-        /**
-         * NEW, FOCUSED PROMPT specifically for analyzing migration errors.
-         */
+        function getMappingGenerationPrompt(userRequest, mysqlSchema, postgresSchema) {
+            // This function creates the detailed prompt for the AI to generate mapping rules.
+            const schemasString = `
+## Source Schema (MySQL)
+\`\`\`json
+${JSON.stringify(mysqlSchema, null, 2)}
+\`\`\`
+
+## Target Schema (PostgreSQL)
+\`\`\`json
+${JSON.stringify(postgresSchema, null, 2)}
+\`\`\`
+`;
+
+            return `
+You are an expert AI data migration engineer. Your task is to act as a "compiler" that converts a user's natural language request into a valid JSON object representing mapping rules for a database migration tool.
+
+**IMPORTANT:** You MUST ONLY respond with the raw JSON object. Do not include any explanatory text, markdown formatting like \`\`\`json, or anything else outside of the JSON structure. Your entire response must be a single, valid JSON object.
+
+Here are the schemas you are working with:
+${schemasString}
+
+Based on the user's request below, generate a JSON object that defines the mapping rules. The JSON object's keys are the **target (PostgreSQL) table names**. The values are objects where keys are the **target column names** and values are the specific rule objects. For simple direct mappings, you can use the shorthand: \`"target_column": { "source": "source_column" }\`. For more complex mappings, use the full rule structure like \`{ "type": "static", "value": "active" }\`.
+
+**User Request:** "${userRequest}"
+
+**Analyze the request and schemas carefully. Think step-by-step to create the rules. Make intelligent guesses when names are similar (e.g., 'user.id' maps to 'app_user.id'). Only create mappings for the tables and columns mentioned or clearly implied by the user's request.**
+`;
+        }
+
         function getErrorAnalysisPrompt(errorDetails) {
             return `
 You are a database expert specializing in MySQL-to-PostgreSQL migrations. A user's data migration failed for a specific row. Analyze the provided error and give a clear, actionable solution using the migration tool.
@@ -1906,14 +2103,13 @@ You are a database expert specializing in MySQL-to-PostgreSQL migrations. A user
 4.  Click "Save Mapping" and run the migration again.
 `;
         }
-        
+
         function askAiAboutError(errorDetails) {
             const modalOverlay = document.getElementById('ai-chat-modal-overlay');
             modalOverlay.classList.remove('hidden');
             setTimeout(() => modalOverlay.classList.add('visible'), 10);
-            
+
             const prompt = getErrorAnalysisPrompt(errorDetails);
-            // Pass a user-friendly message for display, but use the detailed prompt for the API call
             sendChatMessage(prompt, "I have a migration error. Can you tell me how to fix it?");
         }
 
@@ -1924,7 +2120,6 @@ You are a database expert specializing in MySQL-to-PostgreSQL migrations. A user
 
             if (!userText) return;
 
-            // Display user message
             const userMessageDiv = document.createElement('div');
             userMessageDiv.className = 'chat-message user-message';
             userMessageDiv.textContent = userText;
@@ -1933,25 +2128,32 @@ You are a database expert specializing in MySQL-to-PostgreSQL migrations. A user
             input.value = '';
             history.scrollTop = history.scrollHeight;
 
-            // Prepare for AI response
+            // Decide which mode to use
+            const schemasLoaded = Object.keys(mysqlSchemaData).length > 0 && Object.keys(postgresSchemaData).length > 0;
+            
+            if (schemasLoaded && !prompt) { // If schemas are loaded and it's not a pre-canned prompt (like for errors)
+                await generateAndApplyMapping(userText);
+            } else {
+                await getGeneralAiResponse(prompt || userText);
+            }
+        }
+
+        async function getGeneralAiResponse(userTextOrPrompt) {
+            const history = document.getElementById('ai-chat-history');
             const aiMessageDiv = document.createElement('div');
             aiMessageDiv.className = 'chat-message ai-message';
             aiMessageDiv.innerHTML = 'Thinking...';
             history.appendChild(aiMessageDiv);
             history.scrollTop = history.scrollHeight;
 
-            // Use the specific prompt if provided, otherwise build the general one
-            const fullPrompt = prompt || (getToolContext() + "\n\n---\n\nUser Question: " + userText);
-            
+            const fullPrompt = getToolContext() + "\n\n---\n\nUser Question: " + userTextOrPrompt;
+
             try {
                 const apiKey = "AIzaSyAVlRPQs2bwMTRw7oDOBC4cDDFmP7zIZkM"; // If you want to use models other than gemini-2.0-flash or imagen-3.0-generate-002, provide an API key here. Otherwise, leave this as-is.
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-                
+
                 const requestPayload = {
-                    contents: [{
-                        role: "user",
-                        parts: [{ text: fullPrompt }]
-                    }]
+                    contents: [{ role: "user", parts: [{ text: fullPrompt }] }]
                 };
 
                 const response = await fetch(apiUrl, {
@@ -1966,16 +2168,12 @@ You are a database expert specializing in MySQL-to-PostgreSQL migrations. A user
                 }
 
                 const result = await response.json();
-                
-                if (result.candidates && result.candidates.length > 0 &&
-                    result.candidates[0].content && result.candidates[0].content.parts &&
-                    result.candidates[0].content.parts.length > 0) {
+                if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) {
                     const aiText = result.candidates[0].content.parts[0].text;
                     aiMessageDiv.innerHTML = markdownToHtml(aiText);
                 } else {
                     aiMessageDiv.textContent = "Sorry, I couldn't get a response. The API might have returned an empty result or the content was blocked.";
                 }
-
             } catch (error) {
                 console.error("AI Assistant Error:", error);
                 aiMessageDiv.textContent = `Sorry, I encountered an error. Please check the console for details. Error: ${error.message}`;
@@ -1983,40 +2181,140 @@ You are a database expert specializing in MySQL-to-PostgreSQL migrations. A user
 
             history.scrollTop = history.scrollHeight;
         }
-        
+
+        async function generateAndApplyMapping(userText) {
+            const history = document.getElementById('ai-chat-history');
+            const aiMessageDiv = document.createElement('div');
+            aiMessageDiv.className = 'chat-message ai-message';
+            aiMessageDiv.innerHTML = 'Analyzing schemas and your request to generate mapping...';
+            history.appendChild(aiMessageDiv);
+            history.scrollTop = history.scrollHeight;
+
+            const fullPrompt = getMappingGenerationPrompt(userText, mysqlSchemaData, postgresSchemaData);
+            
+            try {
+                const apiKey = "AIzaSyAVlRPQs2bwMTRw7oDOBC4cDDFmP7zIZkM"; // If you want to use models other than gemini-2.0-flash or imagen-3.0-generate-002, provide an API key here. Otherwise, leave this as-is.
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const requestPayload = {
+                    contents: [{ role: "user", parts: [{ text: fullPrompt }] }]
+                };
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestPayload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`API error: ${response.statusText} - ${errorData.error?.message}`);
+                }
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) {
+                    let jsonText = result.candidates[0].content.parts[0].text;
+                    
+                    jsonText = jsonText.trim().replace(/^```json\s*/, '').replace(/```$/, '').trim();
+
+                    try {
+                        const newRules = JSON.parse(jsonText);
+                        
+                        // FIX: Process simplified rules from AI into the full format
+                        const processedRules = {};
+                        for (const targetTable in newRules) {
+                            processedRules[targetTable] = {};
+                            for (const targetCol in newRules[targetTable]) {
+                                const rule = newRules[targetTable][targetCol];
+                                if (rule.source && !rule.type) {
+                                    // This is the simplified format, convert it
+                                    let sourceTable = null;
+                                    // Find which source table contains this column
+                                    for (const mysqlTable in mysqlSchemaData) {
+                                        if (mysqlSchemaData[mysqlTable].columns.some(c => c.name === rule.source)) {
+                                            sourceTable = mysqlTable;
+                                            break;
+                                        }
+                                    }
+                                    if (sourceTable) {
+                                        processedRules[targetTable][targetCol] = {
+                                            type: 'direct',
+                                            value: rule.source,
+                                            source_table: sourceTable
+                                        };
+                                    }
+                                } else {
+                                    // It's already in the full format
+                                    processedRules[targetTable][targetCol] = rule;
+                                }
+                            }
+                        }
+
+                        // Deep merge the new, processed rules into the existing ones
+                        const affectedSourceTables = new Set();
+                        const affectedTargetTables = new Set();
+                        for (const table in processedRules) {
+                            if (!mappingRules[table]) mappingRules[table] = {};
+                            Object.assign(mappingRules[table], processedRules[table]);
+                            affectedTargetTables.add(table);
+                            for (const col in processedRules[table]) {
+                                if (processedRules[table][col].source_table) {
+                                    affectedSourceTables.add(processedRules[table][col].source_table);
+                                }
+                            }
+                        }
+
+                        updateColumnUIs();
+                        
+                        document.querySelectorAll('#pg-table-filter input[type="checkbox"]').forEach(cb => {
+                            if (affectedTargetTables.has(cb.value)) cb.checked = true;
+                        });
+                        document.querySelectorAll('#mysql-table-filter input[type="checkbox"]').forEach(cb => {
+                            if (affectedSourceTables.has(cb.value)) cb.checked = true;
+                        });
+
+                        updateSourceTableVisibility();
+                        updateTargetTableVisibility();
+
+
+                        aiMessageDiv.innerHTML = `I've automatically applied the mapping based on your request. Please review the changes in the main UI. You can continue to refine them manually or ask me to make more changes.`;
+
+                    } catch (parseError) {
+                         console.error("JSON Parse Error:", parseError, "Raw text from AI:", jsonText);
+                         aiMessageDiv.textContent = "Sorry, the AI returned an invalid mapping format. I've logged the details to the console. Please try rephrasing your request.";
+                    }
+
+                } else {
+                    aiMessageDiv.textContent = "Sorry, I couldn't generate a valid mapping from your request. Please try to be more specific.";
+                }
+
+            } catch (error) {
+                console.error("AI Mapping Error:", error);
+                aiMessageDiv.textContent = `Sorry, I encountered an error while generating the mapping. Please check the console for details. Error: ${error.message}`;
+            }
+             history.scrollTop = history.scrollHeight;
+        }
+
         function markdownToHtml(md) {
             let html = md;
-
-            // Process code blocks first to preserve their content
             html = html.replace(/```([\s\S]*?)```/g, (match, p1) => `<pre><code>${escapeHtml(p1.trim())}</code></pre>`);
-            
-            // Headers
             html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
             html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
             html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
-
-            // Bold and Italic
             html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
             html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-            
-            // Lists (more robustly)
             html = html.replace(/^\s*[\-\*] (.*$)/gim, '<li>$1</li>');
             html = html.replace(/^\s*\d+\. (.*$)/gim, '<li>$1</li>');
-            html = html.replace(/<\/li>\n<li>/g, '</li><li>'); // Join list items
-            html = html.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>'); // Wrap in <ul>
-            html = html.replace(/<\/ul>\s*<ul>/g, ''); // Merge adjacent lists
-
-            // Inline code
+            html = html.replace(/<\/li>\n<li>/g, '</li><li>');
+            html = html.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+            html = html.replace(/<\/ul>\s*<ul>/g, '');
             html = html.replace(/`(.*?)`/g, '<code>$1</code>');
-
-            // Newlines to <br>
             html = html.replace(/\n/g, '<br>');
-            // Remove <br> inside lists and after headers
-            html = html.replace(/<br\s*\/?>\s*<(ul|h1|h2|h3)>/g, '<$1>');
-            html = html.replace(/<(ul|li)><br\s*\/?>/g, '<$1>');
-            html = html.replace(/<\/(ul|li)><br\s*\/?>/g, '</$1>');
-
-
+            html = html.replace(/<br\s*\/?>\s*<(ul|h1|h2|h3|pre)>/g, '<$1>');
+            html = html.replace(/<\/(ul|h1|h2|h3|pre)><br\s*\/?>/g, '</$1>');
+            html = html.replace(/<(li|code)><br\s*\/?>/g, '<$1>');
+            html = html.replace(/<\/(li|code)><br\s*\/?>/g, '</$1>');
             return html;
         }
 

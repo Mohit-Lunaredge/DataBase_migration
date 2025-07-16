@@ -1,0 +1,54 @@
+{
+    "Reports": {
+        "title": {
+            "type": "direct",
+            "value": "title",
+            "source_table": "reports"
+        },
+        "file_url": {
+            "type": "direct",
+            "value": "link",
+            "source_table": "reports",
+            "on_null": {
+                "type": "static",
+                "value": "#"
+            }
+        },
+        "sanctioning_authority": {
+            "type": "direct",
+            "value": "sauthority",
+            "source_table": "reports"
+        },
+        "amount": {
+            "type": "direct",
+            "value": "amount",
+            "source_table": "reports"
+        },
+        "coordinator_faculty": {
+            "type": "direct",
+            "value": "faculty",
+            "source_table": "reports"
+        },
+        "coordinator_faculty_id": {
+            "type": "target_lookup",
+            "lookup_table": "Cells",
+            "get_col": "user_id",
+            "match_col": "faculty",
+            "default": "",
+            "where_col": "name",
+            "on_null": {
+                "type": "static",
+                "value": "N/A"
+            }
+        },
+        "duration": {
+            "type": "direct",
+            "value": "duration",
+            "source_table": "reports",
+            "on_null": {
+                "type": "static",
+                "value": "N/A"
+            }
+        }
+    }
+}

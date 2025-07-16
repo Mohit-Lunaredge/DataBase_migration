@@ -1,0 +1,22 @@
+{
+    "gallery_photos": {
+        "album_id": {
+            "type": "target_lookup",
+            "lookup_table": "photo_albums",
+            "get_col": "id",
+            "match_col": "albumname",
+            "default": "",
+            "where_col": "name"
+        },
+        "path_to_image": {
+            "type": "direct",
+            "value": "path",
+            "source_table": "gallery"
+        },
+        "description": {
+            "type": "direct",
+            "value": "description",
+            "source_table": "gallery"
+        }
+    }
+}

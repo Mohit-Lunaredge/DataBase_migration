@@ -1,3 +1,4 @@
+# app.py
 import psycopg2
 import re
 import json
@@ -28,7 +29,7 @@ def _initialize_directories():
 # --- Helper function to parse schema from a SQL file ---
 def _get_schema_from_sql_file(filepath):
     """
-    Reads a .sql file from the given path on the server and parses it 
+    Reads a .sql file from the given path on the server and parses it
     to extract table names and their columns, including data types.
     """
     tables = {}
@@ -36,10 +37,10 @@ def _get_schema_from_sql_file(filepath):
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
     except FileNotFoundError:
-        raise 
+        raise
 
     create_table_regex = re.compile(r"CREATE TABLE(?: IF NOT EXISTS)?\s+`([^`]+)`\s+\(([\s\S]+?)\);", re.IGNORECASE)
-    
+
     for match in create_table_regex.finditer(content):
         table_name = match.group(1)
         columns = []
@@ -57,7 +58,7 @@ def _get_schema_from_sql_file(filepath):
         if table_name not in tables:
             columns_from_insert = [c.strip().replace('`', '') for c in match.group(2).split(',')]
             tables[table_name] = {'columns': [{"name": c, "type": "unknown"} for c in columns_from_insert]}
-            
+
     return tables
 
 # --- Core Migration Logic ---
@@ -68,8 +69,8 @@ def _parse_mysql_insert(statement_chunk):
     It now also handles statements where the column list is omitted.
     """
     header_match = re.search(
-        r"INSERT INTO\s+[`\"]?(\w+)[`\"]?(?:\s*\((.*?)\))?\s+VALUES", 
-        statement_chunk, 
+        r"INSERT INTO\s+[`\"]?(\w+)[`\"]?(?:\s*\((.*?)\))?\s+VALUES",
+        statement_chunk,
         re.IGNORECASE | re.DOTALL
     )
     if not header_match:
@@ -78,7 +79,7 @@ def _parse_mysql_insert(statement_chunk):
     table_name = header_match.group(1)
     columns_str = header_match.group(2)
     columns = [c.strip().strip('`"') for c in columns_str.split(',')] if columns_str else None
-    
+
     try:
         values_keyword_pos = re.search(r"VALUES\s*", statement_chunk, re.IGNORECASE).end()
     except AttributeError:
@@ -86,7 +87,7 @@ def _parse_mysql_insert(statement_chunk):
 
     cursor = values_keyword_pos
     all_rows = []
-    
+
     while cursor < len(statement_chunk):
         try:
             start_paren_idx = statement_chunk.index('(', cursor)
@@ -117,17 +118,17 @@ def _parse_mysql_insert(statement_chunk):
                         end_paren_idx = cursor
                         break
             cursor += 1
-        
+
         if end_paren_idx == -1:
             break
-            
+
         row_content_str = statement_chunk[row_str_start:end_paren_idx]
-        
+
         row_values = []
         current_value = ""
         in_string_inner = False
         is_escaped_inner = False
-        
+
         for char in row_content_str:
             if is_escaped_inner:
                 current_value += char
@@ -156,7 +157,7 @@ def _parse_mysql_insert(statement_chunk):
                 cleaned_values.append(val_unescaped)
             else:
                 cleaned_values.append(v_stripped)
-        
+
         if columns is None or len(cleaned_values) == len(columns):
             all_rows.append(cleaned_values)
 
@@ -177,7 +178,7 @@ def _check_where_condition(row_dict, where_conditions):
         col = condition.get('column')
         op = condition.get('op')
         val = condition.get('value')
-        
+
         if not col or not op:
             continue
 
@@ -241,17 +242,17 @@ def _convert_role_to_int(value):
     """
     if not value or not isinstance(value, str):
         return value
-        
+
     role_map = {
         'admin': 1,
         'teacher': 2,
         'student': 3,
     }
-    
+
     lower_value = value.lower()
     if lower_value in role_map:
         return role_map[lower_value]
-    
+
     try:
         return int(value)
     except (ValueError, TypeError):
@@ -264,7 +265,7 @@ def _apply_transformation(source_row, rule, counters, pg_table, pg_col):
     if rule.get('transform') == 'convertRoleToInt':
         source_value = source_row.get(rule['value'])
         return _convert_role_to_int(source_value)
-        
+
     if rule['function'] == 'CONCAT':
         final_parts = []
         if 'parts' not in rule.get('params', {}):
@@ -281,7 +282,7 @@ def _apply_transformation(source_row, rule, counters, pg_table, pg_col):
                 counter_key = f"{pg_table}.{pg_col}.concat.{part.get('key', 'default_key')}"
                 if counter_key not in counters:
                     counters[counter_key] = part.get('start', 1)
-                
+
                 current_val = counters[counter_key]
                 final_parts.append(str(current_val))
                 counters[counter_key] += part.get('step', 1)
@@ -324,7 +325,7 @@ def _apply_post_transformations(value, rule):
                     transformed_value = False
         except (ValueError, TypeError):
             pass
-            
+
     return transformed_value
 
 def _apply_fallback_rules(value, rule, counters, pg_table, pg_col):
@@ -335,7 +336,7 @@ def _apply_fallback_rules(value, rule, counters, pg_table, pg_col):
     fallback_rule = rule.get('on_null')
     if not fallback_rule:
         return None
-        
+
     if fallback_rule['type'] == 'set_null':
         return None
     if fallback_rule['type'] == 'static':
@@ -347,18 +348,18 @@ def _apply_fallback_rules(value, rule, counters, pg_table, pg_col):
         current_val = counters[counter_key]
         counters[counter_key] += fallback_rule.get('step', 1)
         return current_val
-        
+
     return None
 
 def _execute_custom_commands(cursor, commands_str, summary, command_type):
     """Executes a block of semi-colon separated SQL commands."""
     if not commands_str:
         return
-    
+
     print(f"Executing {command_type} commands...")
     summary_key = f"{command_type}_commands"
     summary[summary_key] = {'executed': [], 'errors': []}
-    
+
     commands = [cmd.strip() for cmd in commands_str.split(';') if cmd.strip()]
     for cmd in commands:
         try:
@@ -412,7 +413,7 @@ def _perform_migration(config):
                         if col_to_replace in new_row:
                             new_row[col_to_replace] = _apply_replacements(new_row[col_to_replace], rules)
                     processed_rows.append(new_row)
-                
+
                 all_data[source_table] = processed_rows
                 print(f" -> Applied replacement rules to table: {source_table}")
 
@@ -435,9 +436,9 @@ def _perform_migration(config):
                     source_table = rule['source_table']
                     group_by_col = rule['group_by_column']
                     aggregate_col = rule['aggregate_column']
-                    
+
                     print(f" -> Pre-aggregating for {pg_table}.{pg_col} from {source_table}")
-                    
+
                     cache_key = f"{source_table}_{group_by_col}_{aggregate_col}"
                     if cache_key in aggregated_data_cache:
                         continue
@@ -448,9 +449,34 @@ def _perform_migration(config):
                         agg_value = row.get(aggregate_col)
                         if group_key is not None:
                             aggregation_map[group_key].append(agg_value)
-                    
+
                     aggregated_data_cache[cache_key] = dict(aggregation_map)
                     print(f"  - Cached {len(aggregated_data_cache[cache_key])} groups.")
+        
+        # --- Centralized Target Table Caching ---
+        all_target_lookup_tables = set()
+        for pg_table_for_rules in mapping_rules.keys():
+            rules_for_table = mapping_rules[pg_table_for_rules]
+            for pg_col, rule in rules_for_table.items():
+                if rule.get('type') == 'target_lookup':
+                    all_target_lookup_tables.add(rule['lookup_table'])
+                elif rule.get('type') == 'conditional_target_lookup':
+                    for condition in rule.get('conditions', []):
+                        if condition.get('lookup_table'):
+                            all_target_lookup_tables.add(condition['lookup_table'])
+
+        for lookup_table in all_target_lookup_tables:
+            if lookup_table not in cached_target_lookups:
+                print(f" -> Caching TARGET table {lookup_table} for all lookups.")
+                try:
+                    pg_cursor.execute(f'SELECT * FROM "{lookup_table}"')
+                    lookup_data = [dict(zip([desc[0] for desc in pg_cursor.description], row)) for row in pg_cursor.fetchall()]
+                    cached_target_lookups[lookup_table] = lookup_data
+                    print(f" - Cached {len(lookup_data)} rows from {lookup_table}.")
+                except Exception as e:
+                    print(f" - ERROR: Could not cache target table {lookup_table}. Error: {e}")
+                    migration_summary[pg_table_for_rules]['errors'].append({"error": f"Failed to cache target lookup table {lookup_table}: {e}"})
+
 
         for pg_table in mapping_rules.keys():
             rules = mapping_rules[pg_table]
@@ -464,7 +490,7 @@ def _perform_migration(config):
             if not source_tables_involved:
                 print(f" -> No source tables found for {pg_table}. Skipping.")
                 continue
-            
+
             print(f" -> Source tables involved: {', '.join(source_tables_involved)}")
 
             iteration_data = []
@@ -472,7 +498,7 @@ def _perform_migration(config):
                 print(" -> Multiple source tables found. Merging data...")
                 merged_source_data = defaultdict(dict)
                 primary_merge_key_processed = set()
-                
+
                 primary_source_table = list(source_tables_involved)[0]
 
                 for row in all_data.get(primary_source_table, []):
@@ -493,47 +519,37 @@ def _perform_migration(config):
                 primary_source_table = list(source_tables_involved)[0]
                 print(f" -> Single source table identified: {primary_source_table}")
                 iteration_data = all_data[primary_source_table]
-                
+
                 table_filters = filters.get(primary_source_table, {})
                 if 'where' in table_filters and table_filters['where']:
                     filtered_rows = [row for row in iteration_data if _check_where_condition(row, table_filters['where'])]
                     migration_summary[pg_table]['filtered_out'] += len(iteration_data) - len(filtered_rows)
                     iteration_data = filtered_rows
-                
+
                 if 'sort' in table_filters and table_filters['sort'].get('column'):
                     sort_settings = table_filters['sort']
                     iteration_data.sort(key=lambda item: _sort_key_helper(item, sort_settings['column']), reverse=(sort_settings.get('order', 'ASC').upper() == 'DESC'))
 
+            # --- Centralized SOURCE Table Indexing ---
             indexed_source_lookups = {}
             for _, rule in rules.items():
+                lookup_tables_to_index = []
                 if rule['type'] == 'lookup':
-                    lookup_source_table = rule['lookup_source_table']
-                    where_col = rule['where_col']
-                    index_key = f"source_{lookup_source_table}_{where_col}"
+                    lookup_tables_to_index.append((rule['lookup_source_table'], rule['where_col']))
+                elif rule['type'] == 'conditional_source_lookup':
+                     for condition in rule.get('conditions', []):
+                        if condition.get('lookup_table') and condition.get('where_col'):
+                            lookup_tables_to_index.append((condition['lookup_table'], condition['where_col']))
+                
+                for table_to_index, col_to_index in lookup_tables_to_index:
+                    index_key = f"source_{table_to_index}_{col_to_index}"
                     if index_key not in indexed_source_lookups:
-                        print(f" -> Indexing SOURCE table {lookup_source_table} on column {where_col} for lookups.")
+                        print(f" -> Indexing SOURCE table {table_to_index} on column {col_to_index} for lookups.")
                         indexed_source_lookups[index_key] = {
-                            str(row.get(where_col)): row
-                            for row in all_data.get(lookup_source_table, [])
-                            if where_col in row and row.get(where_col) is not None
+                            str(row.get(col_to_index)): row
+                            for row in all_data.get(table_to_index, [])
+                            if col_to_index in row and row.get(col_to_index) is not None
                         }
-            
-            for _, rule in rules.items():
-                if rule['type'] == 'target_lookup':
-                    lookup_table = rule['lookup_table']
-                    if lookup_table not in cached_target_lookups:
-                        print(f" -> Caching TARGET table {lookup_table} for lookups.")
-                        try:
-                            pg_cursor.execute(f'SELECT * FROM "{lookup_table}"')
-                            lookup_data = [dict(zip([desc[0] for desc in pg_cursor.description], row)) for row in pg_cursor.fetchall()]
-                            cached_target_lookups[lookup_table] = {
-                                str(row.get(rule['where_col'])): row
-                                for row in lookup_data if rule['where_col'] in row
-                            }
-                            print(f" - Cached {len(cached_target_lookups[lookup_table])} rows.")
-                        except Exception as e:
-                            print(f" - ERROR: Could not cache target table {lookup_table}. Error: {e}")
-                            migration_summary[pg_table]['errors'].append({"error": f"Failed to cache target lookup table {lookup_table}: {e}"})
 
             for source_row in iteration_data:
                 pg_values_dict = {}
@@ -556,9 +572,43 @@ def _perform_migration(config):
                             value_found = lookup_row.get(rule['get_col']) if lookup_row else rule.get('default', None)
                         elif rule['type'] == 'target_lookup':
                             match_value = str(source_row.get(rule['match_col']))
-                            lookup_cache = cached_target_lookups.get(rule['lookup_table'], {})
-                            target_row = lookup_cache.get(match_value)
+                            lookup_data = cached_target_lookups.get(rule['lookup_table'], [])
+                            target_row = None
+                            for row in lookup_data:
+                                if str(row.get(rule['where_col'])) == match_value:
+                                    target_row = row
+                                    break
                             value_found = target_row.get(rule['get_col']) if target_row else rule.get('default', None)
+                        elif rule['type'] == 'conditional_target_lookup':
+                            match_value = str(source_row.get(rule['match_col']))
+                            value_found = rule.get('default', None)
+                            for condition in rule.get('conditions', []):
+                                lookup_data = cached_target_lookups.get(condition['lookup_table'], [])
+                                found_row = None
+                                for row in lookup_data:
+                                    if str(row.get(condition['where_col'])) == match_value:
+                                        found_row = row
+                                        break
+                                if found_row:
+                                    if 'get_col' in condition:
+                                        value_found = found_row.get(condition['get_col'])
+                                    elif 'set_static_value' in condition:
+                                        value_found = condition['set_static_value']
+                                    break
+                        # --- NEW: Conditional Source Lookup Logic ---
+                        elif rule['type'] == 'conditional_source_lookup':
+                            match_value = str(source_row.get(rule['match_col']))
+                            value_found = rule.get('default', None) # Start with default
+                            for condition in rule.get('conditions', []):
+                                index_key = f"source_{condition['lookup_table']}_{condition['where_col']}"
+                                lookup_row = indexed_source_lookups.get(index_key, {}).get(match_value)
+                                
+                                if lookup_row:
+                                    if 'get_col' in condition:
+                                        value_found = lookup_row.get(condition['get_col'])
+                                    elif 'set_static_value' in condition:
+                                        value_found = condition['set_static_value']
+                                    break # Condition met, stop checking
                         elif rule['type'] == 'basic_target_lookup':
                             query = f'SELECT "{rule["get_col"]}" FROM "{rule["lookup_table"]}"'
                             params = []
@@ -584,22 +634,22 @@ def _perform_migration(config):
 
                     except Exception as e:
                         print(f"Error processing rule for {pg_table}.{pg_col}: {e}")
-                    
+
                     processed_value = _apply_post_transformations(value_found, rule)
-                    
+
                     final_value = _apply_fallback_rules(processed_value, rule, counters, pg_table, pg_col)
-                    
+
                     pg_values_dict[pg_col] = final_value
 
                 final_pg_cols = list(pg_values_dict.keys())
                 final_pg_values = list(pg_values_dict.values())
                 quoted_columns = ', '.join(f'"{c}"' for c in final_pg_cols)
                 placeholders = ", ".join(["%s"] * len(final_pg_cols))
-                
+
                 insert_query = f'INSERT INTO "{pg_table}" ({quoted_columns}) VALUES ({placeholders})'
-                
+
                 if config.get('handle_conflicts'):
-                    conflict_column = "id" 
+                    conflict_column = "id"
                     update_clause_parts = [f'"{col}" = EXCLUDED."{col}"' for col in final_pg_cols if col != conflict_column]
                     if update_clause_parts:
                         update_clause = ", ".join(update_clause_parts)
@@ -624,7 +674,7 @@ def _perform_migration(config):
                         migration_summary[pg_table]['errors'].append(error_detail)
 
             pg_conn.commit()
-        
+
         _execute_custom_commands(pg_cursor, config.get('post_migration_commands'), migration_summary, 'post_migration')
         pg_conn.commit()
 
@@ -636,7 +686,7 @@ def _perform_migration(config):
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         log_filename = f"migration_log_{timestamp}.json"
         log_filepath = os.path.join(LOGS_DIR, log_filename)
-        
+
         log_data = {
             "timestamp": timestamp,
             "migration_config": {
@@ -647,7 +697,7 @@ def _perform_migration(config):
             },
             "summary": dict(migration_summary)
         }
-        
+
         with open(log_filepath, 'w') as f:
             json.dump(log_data, f, indent=4)
         print(f"Migration log saved to {log_filepath}")
@@ -728,7 +778,7 @@ def run_migration():
     else:
         full_file_path = file_path_from_client
     config['mysql_dump_file_path'] = full_file_path
-    
+
     log_stream = io.StringIO()
     try:
         with redirect_stdout(log_stream):
@@ -757,7 +807,7 @@ def get_column_data():
         return jsonify({"error": "File path, table name, and column name are required."}), 400
 
     filepath = custom_path if custom_path else os.path.join(SQL_FILES_DIR, filename)
-    
+
     try:
         file_schema = _get_schema_from_sql_file(filepath)
         with open(filepath, 'r', encoding='utf-8') as f:
@@ -769,7 +819,7 @@ def get_column_data():
 
     unique_values = set()
     total_rows = 0
-    
+
     insert_finder_regex = re.compile(
         r"INSERT INTO\s+[`\"]?{}[`\"]?".format(re.escape(table_name_to_find)),
         re.IGNORECASE
@@ -782,12 +832,12 @@ def get_column_data():
             break
 
         stmt_start = match.start()
-        
+
         cursor = stmt_start
         in_string = False
         is_escaped = False
         stmt_end = -1
-        
+
         while cursor < len(full_content):
             char = full_content[cursor]
             if is_escaped:
@@ -800,15 +850,15 @@ def get_column_data():
                 stmt_end = cursor + 1
                 break
             cursor += 1
-            
+
         if stmt_end == -1:
             content_cursor = len(full_content)
             continue
 
         full_stmt = full_content[stmt_start:stmt_end]
-        
+
         parsed_table, parsed_cols, all_rows = _parse_mysql_insert(full_stmt)
-        
+
         if parsed_table != table_name_to_find:
             content_cursor = stmt_end
             continue
@@ -820,7 +870,7 @@ def get_column_data():
             else:
                 content_cursor = stmt_end
                 continue
-        
+
         try:
             col_index = current_headers.index(column_name_to_find)
             for row in all_rows:
@@ -828,10 +878,10 @@ def get_column_data():
                 if col_index < len(row):
                     unique_values.add(row[col_index])
         except (ValueError, IndexError):
-            pass 
-        
+            pass
+
         content_cursor = stmt_end
-            
+
     return jsonify({
         "unique_values": sorted(list(v for v in unique_values if v is not None)),
         "total_rows": total_rows
@@ -860,7 +910,7 @@ def get_source_table_data():
 
     table_data = []
     headers = []
-    
+
     insert_finder_regex = re.compile(
         r"INSERT INTO\s+[`\"]?{}[`\"]?".format(re.escape(table_name_to_find)),
         re.IGNORECASE
@@ -874,12 +924,12 @@ def get_source_table_data():
             break
 
         stmt_start = match.start()
-        
+
         cursor = stmt_start
         in_string = False
         is_escaped = False
         stmt_end = -1
-        
+
         while cursor < len(full_content):
             char = full_content[cursor]
             if is_escaped:
@@ -892,19 +942,19 @@ def get_source_table_data():
                 stmt_end = cursor + 1
                 break
             cursor += 1
-            
+
         if stmt_end == -1:
             content_cursor = len(full_content)
             continue
 
         full_stmt = full_content[stmt_start:stmt_end]
-        
+
         parsed_table, parsed_cols, all_rows = _parse_mysql_insert(full_stmt)
-        
+
         if parsed_table != table_name_to_find:
             content_cursor = stmt_end
             continue
-        
+
         current_headers = parsed_cols
         if current_headers is None:
             if parsed_table in file_schema:
@@ -915,7 +965,7 @@ def get_source_table_data():
 
         if not headers:
             headers = current_headers
-        
+
         if all_rows:
             for row in all_rows:
                 if len(row) == len(headers):
@@ -935,13 +985,13 @@ def save_mapping():
     config = data.get('config')
     if not name or not config:
         return jsonify({"error": "Mapping name and config are required."}), 400
-    
+
     try:
         _initialize_directories()
         safe_name = "".join([c for c in name if c.isalpha() or c.isdigit() or c in (' ', '_', '-')]).rstrip()
         if not safe_name:
             return jsonify({"error": "Invalid mapping name."}), 400
-        
+
         filepath = os.path.join(MAPPINGS_DIR, f"{safe_name}.json")
         with open(filepath, 'w') as f:
             json.dump(config, f, indent=4)
