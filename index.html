@@ -929,7 +929,7 @@
                 for(const pgCol in mappingRules[pgTable]) {
                     const rule = mappingRules[pgTable][pgCol];
                     const targetEl = document.getElementById(`pg-${pgTable}-${pgCol}`);
-                    if (!targetEl || !rule || !rule.type) continue; // FIX: Add check for rule and rule.type
+                    if (!targetEl || !rule || !rule.type) continue; 
 
                     let badgeText = `[${rule.type.toUpperCase()}]`;
                     if(rule.type === 'direct') {
@@ -2048,33 +2048,59 @@ You are an expert AI assistant for a "MySQL to PostgreSQL Migration Tool". Your 
 `;
         }
         
-        function getMappingGenerationPrompt(userRequest, mysqlSchema, postgresSchema) {
-            // This function creates the detailed prompt for the AI to generate mapping rules.
+        function getMappingGenerationPrompt(userRequest, sourceSchema, targetSchema) {
             const schemasString = `
-## Source Schema (MySQL)
+## Source Schema (MySQL) - ONLY USE THESE TABLES
 \`\`\`json
-${JSON.stringify(mysqlSchema, null, 2)}
+${JSON.stringify(sourceSchema, null, 2)}
 \`\`\`
 
-## Target Schema (PostgreSQL)
+## Target Schema (PostgreSQL) - ONLY USE THESE TABLES
 \`\`\`json
-${JSON.stringify(postgresSchema, null, 2)}
+${JSON.stringify(targetSchema, null, 2)}
 \`\`\`
 `;
 
             return `
-You are an expert AI data migration engineer. Your task is to act as a "compiler" that converts a user's natural language request into a valid JSON object representing mapping rules for a database migration tool.
+You are an expert AI data migration engineer. Your task is to act as a "compiler" that converts a user's natural language request into a valid JSON object representing mapping rules for the tool.
 
-**IMPORTANT:** You MUST ONLY respond with the raw JSON object. Do not include any explanatory text, markdown formatting like \`\`\`json, or anything else outside of the JSON structure. Your entire response must be a single, valid JSON object.
+**IMPORTANT RULES:**
+1.  You MUST ONLY respond with the raw JSON object. Do not include any explanatory text, markdown formatting like \`\`\`json, or anything else outside of the JSON structure.
+2.  You MUST ONLY use the tables and columns provided in the Source and Target schemas above. Do not invent tables or columns.
+3.  If the user's request cannot be fulfilled using the rule structures below, or if it requires functionality the tool does not have, you MUST respond with the text: "UNSUPPORTED_REQUEST".
 
-Here are the schemas you are working with:
-${schemasString}
+**Mapping Rule Structures You Can Generate:**
 
-Based on the user's request below, generate a JSON object that defines the mapping rules. The JSON object's keys are the **target (PostgreSQL) table names**. The values are objects where keys are the **target column names** and values are the specific rule objects. For simple direct mappings, you can use the shorthand: \`"target_column": { "source": "source_column" }\`. For more complex mappings, use the full rule structure like \`{ "type": "static", "value": "active" }\`.
+1.  **Direct Mapping (Shorthand):** For simple column-to-column mappings.
+    * **Format:** \`"target_column": { "source": "source_column_name" }\`
+    * **Example:** \`"email": { "source": "user_email" }\`
+
+2.  **Static Value:** To set a column to a fixed, static value.
+    * **Format:** \`"target_column": { "type": "static", "value": "Your Static Value" }\`
+    * **Example:** \`"is_active": { "type": "static", "value": true }\`
+
+3.  **Transformation (CONCAT):** To combine columns.
+    * **Format:** \`"target_column": { "type": "transformation", "function": "CONCAT", "source_table": "source_table_name", "params": { "parts": [ ... ] } }\`
+    * **Part objects:** Can be \`{ "type": "column", "value": "col_name" }\` or \`{ "type": "separator", "value": " " }\`.
+    * **Example (for "full_name"):** \`"full_name": { "type": "transformation", "function": "CONCAT", "source_table": "users", "params": { "parts": [{ "type": "column", "value": "first_name" }, { "type": "separator", "value": " " }, { "type": "column", "value": "last_name" }] } }\`
+
+4.  **Source Lookup:** To find a value in another source table.
+    * **Format:** \`"target_column": { "type": "lookup", "lookup_source_table": "table_to_search", "match_col": "col_from_primary_source", "where_col": "col_in_lookup_table", "get_col": "col_to_get_from_lookup_table" }\`
+    * **Example:** \`"category_id": { "type": "lookup", "lookup_source_table": "categories", "match_col": "category_name", "where_col": "name", "get_col": "id" }\`
+
+5.  **Target Lookup:** To find a value in a target table (that may already have data).
+    * **Format:** \`"target_column": { "type": "target_lookup", "source_table": "primary_source_table", "lookup_table": "target_table_to_search", "match_col": "col_from_primary_source", "where_col": "col_in_lookup_table", "get_col": "col_to_get_from_lookup_table" }\`
+    * **Example:** \`"author_id": { "type": "target_lookup", "source_table": "source_posts", "lookup_table": "public_users", "match_col": "author_email", "where_col": "email", "get_col": "id" }\`
 
 **User Request:** "${userRequest}"
 
-**Analyze the request and schemas carefully. Think step-by-step to create the rules. Make intelligent guesses when names are similar (e.g., 'user.id' maps to 'app_user.id'). Only create mappings for the tables and columns mentioned or clearly implied by the user's request.**
+**Your Task:**
+Based on the user's request, generate the mapping rules.
+- Use the shorthand for simple direct mappings.
+- Use the full, detailed structures for any advanced mappings.
+- Infer the \`source_table\` correctly based on the column names provided in the schema.
+- Only create mappings for the tables and columns mentioned or clearly implied by the user's request.
+- If the request is impossible, remember to respond with "UNSUPPORTED_REQUEST".
 `;
         }
 
@@ -2190,7 +2216,29 @@ You are a database expert specializing in MySQL-to-PostgreSQL migrations. A user
             history.appendChild(aiMessageDiv);
             history.scrollTop = history.scrollHeight;
 
-            const fullPrompt = getMappingGenerationPrompt(userText, mysqlSchemaData, postgresSchemaData);
+            // Get only the selected tables to provide as context
+            const getSelectedTables = (containerId, schemaData) => {
+                const container = document.getElementById(containerId);
+                const checkboxes = container.querySelectorAll('input[type="checkbox"]:checked');
+                const selectedTableNames = Array.from(checkboxes).map(cb => cb.value);
+                const selectedSchema = {};
+                selectedTableNames.forEach(name => {
+                    if (schemaData[name]) {
+                        selectedSchema[name] = schemaData[name];
+                    }
+                });
+                return selectedSchema;
+            };
+
+            const selectedSourceSchema = getSelectedTables('mysql-table-filter', mysqlSchemaData);
+            const selectedTargetSchema = getSelectedTables('pg-table-filter', postgresSchemaData);
+
+            if (Object.keys(selectedSourceSchema).length === 0 || Object.keys(selectedTargetSchema).length === 0) {
+                aiMessageDiv.innerHTML = "Please select at least one source and one target table using the filter dropdowns before asking me to create a mapping.";
+                return;
+            }
+
+            const fullPrompt = getMappingGenerationPrompt(userText, selectedSourceSchema, selectedTargetSchema);
             
             try {
                 const apiKey = "AIzaSyAVlRPQs2bwMTRw7oDOBC4cDDFmP7zIZkM"; // If you want to use models other than gemini-2.0-flash or imagen-3.0-generate-002, provide an API key here. Otherwise, leave this as-is.
@@ -2214,25 +2262,27 @@ You are a database expert specializing in MySQL-to-PostgreSQL migrations. A user
                 const result = await response.json();
 
                 if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) {
-                    let jsonText = result.candidates[0].content.parts[0].text;
+                    let textResponse = result.candidates[0].content.parts[0].text;
                     
-                    jsonText = jsonText.trim().replace(/^```json\s*/, '').replace(/```$/, '').trim();
+                    if (textResponse.trim() === "UNSUPPORTED_REQUEST") {
+                        aiMessageDiv.innerHTML = `The tool currently can't do this. Please mail your query to <a href="mailto:kaushikmohit240903@gmail.com" class="text-indigo-600 hover:underline">kaushikmohit240903@gmail.com</a> with your query, and we will try to build a function to support your request.`;
+                        return;
+                    }
+
+                    textResponse = textResponse.trim().replace(/^```json\s*/, '').replace(/```$/, '').trim();
 
                     try {
-                        const newRules = JSON.parse(jsonText);
+                        const newRules = JSON.parse(textResponse);
                         
-                        // FIX: Process simplified rules from AI into the full format
                         const processedRules = {};
                         for (const targetTable in newRules) {
                             processedRules[targetTable] = {};
                             for (const targetCol in newRules[targetTable]) {
                                 const rule = newRules[targetTable][targetCol];
                                 if (rule.source && !rule.type) {
-                                    // This is the simplified format, convert it
                                     let sourceTable = null;
-                                    // Find which source table contains this column
-                                    for (const mysqlTable in mysqlSchemaData) {
-                                        if (mysqlSchemaData[mysqlTable].columns.some(c => c.name === rule.source)) {
+                                    for (const mysqlTable in selectedSourceSchema) {
+                                        if (selectedSourceSchema[mysqlTable].columns.some(c => c.name === rule.source)) {
                                             sourceTable = mysqlTable;
                                             break;
                                         }
@@ -2245,13 +2295,11 @@ You are a database expert specializing in MySQL-to-PostgreSQL migrations. A user
                                         };
                                     }
                                 } else {
-                                    // It's already in the full format
                                     processedRules[targetTable][targetCol] = rule;
                                 }
                             }
                         }
 
-                        // Deep merge the new, processed rules into the existing ones
                         const affectedSourceTables = new Set();
                         const affectedTargetTables = new Set();
                         for (const table in processedRules) {
@@ -2277,11 +2325,10 @@ You are a database expert specializing in MySQL-to-PostgreSQL migrations. A user
                         updateSourceTableVisibility();
                         updateTargetTableVisibility();
 
-
                         aiMessageDiv.innerHTML = `I've automatically applied the mapping based on your request. Please review the changes in the main UI. You can continue to refine them manually or ask me to make more changes.`;
 
                     } catch (parseError) {
-                         console.error("JSON Parse Error:", parseError, "Raw text from AI:", jsonText);
+                         console.error("JSON Parse Error:", parseError, "Raw text from AI:", textResponse);
                          aiMessageDiv.textContent = "Sorry, the AI returned an invalid mapping format. I've logged the details to the console. Please try rephrasing your request.";
                     }
 
